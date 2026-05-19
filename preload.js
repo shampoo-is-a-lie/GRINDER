@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
     gogCancelInstall:   ()                    => ipcRenderer.invoke('gogdl-cancel-install'),
     onGogLoginProgress:   (cb) => ipcRenderer.on('gog-login-progress',   (_, d) => cb(d)),
     onGogInstallProgress: (cb) => ipcRenderer.on('gog-install-progress', (_, d) => cb(d)),
+    onCliSearch:          (cb) => ipcRenderer.on('cli-search', (_, term) => cb(term)),
 
     // Legendary / Epic
     legendaryStatus:       () => ipcRenderer.invoke('legendary-status'),

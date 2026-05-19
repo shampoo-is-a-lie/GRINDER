@@ -179,6 +179,31 @@
                  font-size: 10px; color: var(--text_dim); letter-spacing: 0.5px; gap: 16px; }
     #status-msg { flex: 1; }
   </style>
+  <style>
+    /* ── Font sizes ×1.25 override for CSS classes (titlebar excluded) ── */
+    .sidebar-logo p { font-size: 11px; }
+    .nav-btn { font-size: 14px; }
+    .tool-status { font-size: 13px; }
+    #games-toolbar input { font-size: 15px; }
+    #games-toolbar button { font-size: 14px; }
+    .game-store-badge, .game-size-badge { font-size: 11px; }
+    .store-tab { font-size: 14px; }
+    .game-title { font-size: 16px; }
+    .game-status { font-size: 13px; }
+    .game-actions button { font-size: 13px; }
+    #empty-state p { font-size: 16px; }
+    .settings-section h3, .setting-row label, .setting-row p { font-size: 14px; }
+    .setting-row input, .btn-save-settings { font-size: 15px; }
+    .modal-box h3 { font-size: 16px; }
+    .modal-row label { font-size: 13px; }
+    .modal-row input, .modal-row select { font-size: 15px; }
+    .modal-actions button { font-size: 14px; }
+    #statusbar { font-size: 13px; }
+    /* Titlebar pinned to original sizes */
+    .titlebar-brand { font-size: 13px !important; }
+    .titlebar-brand span { font-size: 10px !important; }
+    .win-btn { font-size: 14px !important; }
+  </style>
 </head>
 <body>
 
@@ -188,8 +213,8 @@
 
       <!-- Header -->
       <div style="padding:20px 24px 16px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
-        <h3 id="install-modal-title" style="margin:0; font-size:13px; font-weight:900; color:var(--accent); letter-spacing:2px; text-transform:uppercase;">Install Game</h3>
-        <p id="install-modal-subtitle" style="margin:6px 0 0; font-size:12px; color:var(--text_sec);"></p>
+        <h3 id="install-modal-title" style="margin:0; font-size:16px; font-weight:900; color:var(--accent); letter-spacing:2px; text-transform:uppercase;">Install Game</h3>
+        <p id="install-modal-subtitle" style="margin:6px 0 0; font-size:15px; color:var(--text_sec);"></p>
       </div>
 
       <!-- Config panel (pre-install) -->
@@ -198,17 +223,17 @@
           <label>Install Directory</label>
           <div style="display:flex; gap:8px;">
             <input id="install-dir-input" placeholder="~/Games" style="flex:1;">
-            <button id="btn-browse-install-dir" style="flex-shrink:0; padding:8px 14px; background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); border-radius:5px; cursor:pointer; font-family:Raleway,sans-serif; font-size:11px; font-weight:700;">Browse</button>
+            <button id="btn-browse-install-dir" style="flex-shrink:0; padding:8px 14px; background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); border-radius:5px; cursor:pointer; font-family:Raleway,sans-serif; font-size:14px; font-weight:700;">Browse</button>
           </div>
-          <p style="font-size:11px; color:var(--text_dim); margin:4px 0 0; line-height:1.5;">The game will be installed inside a subfolder here. Make sure you have enough disk space.</p>
+          <p style="font-size:14px; color:var(--text_dim); margin:4px 0 0; line-height:1.5;">The game will be installed inside a subfolder here. Make sure you have enough disk space.</p>
         </div>
         <!-- Platform selector — only shown for GOG games with both builds -->
         <div id="install-platform-row" style="display:none; gap:6px;">
-          <label style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px; align-self:center; flex-shrink:0;">Platform</label>
+          <label style="font-size:13px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px; align-self:center; flex-shrink:0;">Platform</label>
           <button id="plat-linux" class="store-tab" style="flex:1; border:1px solid var(--border_solid); border-radius:4px; padding:6px;">Linux</button>
           <button id="plat-windows" class="store-tab" style="flex:1; border:1px solid var(--border_solid); border-radius:4px; padding:6px;">Windows</button>
         </div>
-        <div id="install-size-info" style="display:flex; align-items:center; gap:16px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:5px; border:1px solid var(--border_solid); font-size:11px; color:var(--text_dim); min-height:34px; flex-wrap:wrap;">
+        <div id="install-size-info" style="display:flex; align-items:center; gap:16px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:5px; border:1px solid var(--border_solid); font-size:14px; color:var(--text_dim); min-height:34px; flex-wrap:wrap;">
           <span id="install-size-text">Fetching size info…</span>
         </div>
         <div class="modal-actions" style="margin:0;">
@@ -221,23 +246,23 @@
       <div id="install-progress-panel" style="padding:20px 24px; display:none; flex-direction:column; gap:12px; flex:1; overflow:hidden;">
         <div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span id="install-pct-label" style="font-size:12px; font-weight:900; color:var(--accent);">0%</span>
-            <span id="install-speed-label" style="font-size:11px; color:var(--text_dim);"></span>
-            <span id="install-eta-label" style="font-size:11px; color:var(--text_dim);"></span>
+            <span id="install-pct-label" style="font-size:15px; font-weight:900; color:var(--accent);">0%</span>
+            <span id="install-speed-label" style="font-size:14px; color:var(--text_dim);"></span>
+            <span id="install-eta-label" style="font-size:14px; color:var(--text_dim);"></span>
           </div>
           <div style="width:100%; background:rgba(0,0,0,0.4); border-radius:4px; height:8px; overflow:hidden; border:1px solid var(--border_solid);">
             <div id="install-progress-bar" style="height:100%; width:0%; background:var(--accent); transition:width 0.5s ease; border-radius:4px;"></div>
           </div>
         </div>
-        <div id="install-log" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:10px; color:var(--text_sec); white-space:pre-wrap; overflow-y:auto; max-height:220px; line-height:1.6;"></div>
-        <button id="btn-install-cancel-running" style="background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer;">&#x2715; Cancel Download</button>
+        <div id="install-log" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:13px; color:var(--text_sec); white-space:pre-wrap; overflow-y:auto; max-height:220px; line-height:1.6;"></div>
+        <button id="btn-install-cancel-running" style="background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer;">&#x2715; Cancel Download</button>
       </div>
 
       <!-- Done panel -->
       <div id="install-done-panel" style="padding:24px; display:none; flex-direction:column; align-items:center; gap:16px; text-align:center;">
-        <div style="font-size:36px;">&#x2705;</div>
-        <p id="install-done-msg" style="margin:0; font-size:14px; color:var(--text_main); font-weight:700;"></p>
-        <p style="margin:0; font-size:12px; color:var(--text_dim);">The game is ready to launch from GRINDER.</p>
+        <div style="font-size:45px;">&#x2705;</div>
+        <p id="install-done-msg" style="margin:0; font-size:18px; color:var(--text_main); font-weight:700;"></p>
+        <p style="margin:0; font-size:15px; color:var(--text_dim);">The game is ready to launch from GRINDER.</p>
         <button class="btn-confirm" id="btn-install-done">Close</button>
       </div>
 
@@ -258,23 +283,23 @@
       <!-- ── EPIC TAB ── -->
       <div id="tab-panel-epic" style="display:flex; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
         <div id="import-login-panel">
-          <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
+          <p style="font-size:16px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
             GRINDER uses <strong>legendary</strong> to manage your Epic Games library.<br>
             Log in once and your library syncs automatically.
           </p>
-          <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
-          <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
+          <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:15px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
+          <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:14px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
         </div>
         <div id="import-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span id="import-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
-            <button id="btn-import-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
-            <button id="btn-import-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
-            <span id="import-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+            <span id="import-account" style="font-size:14px; color:#66bb6a; font-weight:700;"></span>
+            <button id="btn-import-select-all" style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
+            <button id="btn-import-select-none" style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
+            <span id="import-sel-count" style="font-size:14px; color:var(--text_dim); margin-left:auto;"></span>
           </div>
           <div id="import-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:300px;"></div>
         </div>
-        <div id="import-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No Epic games found in your library.</div>
+        <div id="import-empty" style="display:none; color:var(--text_dim); font-size:16px; text-align:center; padding:20px 0;">No Epic games found in your library.</div>
         <div class="modal-actions" style="margin-top:auto;">
           <button class="btn-cancel" id="btn-import-cancel">Close</button>
           <button class="btn-confirm" id="btn-import-confirm" style="display:none;">Import Selected</button>
@@ -284,22 +309,22 @@
       <!-- ── GOG TAB ── -->
       <div id="tab-panel-gog" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
         <div id="gog-login-panel">
-          <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
+          <p style="font-size:16px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
             Log in with your GOG account. GRINDER fetches your library directly from the GOG API.
           </p>
-          <button id="btn-gog-login" style="background:#9b59d9; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to GOG</button>
-          <div id="gog-login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
+          <button id="btn-gog-login" style="background:#9b59d9; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:15px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to GOG</button>
+          <div id="gog-login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:14px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
         </div>
         <div id="gog-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span id="gog-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
-            <button id="btn-gog-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
-            <button id="btn-gog-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
-            <span id="gog-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+            <span id="gog-account" style="font-size:14px; color:#66bb6a; font-weight:700;"></span>
+            <button id="btn-gog-select-all" style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
+            <button id="btn-gog-select-none" style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
+            <span id="gog-sel-count" style="font-size:14px; color:var(--text_dim); margin-left:auto;"></span>
           </div>
           <div id="gog-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:300px;"></div>
         </div>
-        <div id="gog-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No GOG games found in your library.</div>
+        <div id="gog-empty" style="display:none; color:var(--text_dim); font-size:16px; text-align:center; padding:20px 0;">No GOG games found in your library.</div>
         <div class="modal-actions" style="margin-top:auto;">
           <button class="btn-cancel" id="btn-gog-import-cancel">Close</button>
           <button class="btn-confirm" id="btn-gog-import-confirm" style="display:none; background:#9b59d9; border-color:#9b59d9;">Import Selected</button>
@@ -376,9 +401,9 @@
         <div id="games-toolbar">
           <input id="search-input" placeholder="Search games..." autocomplete="off">
           <button id="btn-add-game">+ Add Game</button>
-          <button id="btn-import-legendary" style="background:transparent; border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import Epic Games library">&#x2B07; Epic</button>
-          <button id="btn-import-gog" style="background:transparent; border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import GOG library">&#x2B07; GOG</button>
-          <button id="btn-verify-installs" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">&#x2713; Verify</button>
+          <button id="btn-import-legendary" style="background:transparent; border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import Epic Games library">&#x2B07; Epic</button>
+          <button id="btn-import-gog" style="background:transparent; border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import GOG library">&#x2B07; GOG</button>
+          <button id="btn-verify-installs" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">&#x2713; Verify</button>
         </div>
         <div id="games-list"></div>
       </div>
@@ -400,42 +425,42 @@
         </div>
         <div class="settings-section">
           <h3>&#x1F3AE; Epic Games (Legendary)</h3>
-          <div id="s-legendary-status" style="font-size:12px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
-          <button id="btn-s-epic-login" style="display:none; background:#0078f2; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Login to Epic Games</button>
-          <button id="btn-s-epic-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Logout</button>
+          <div id="s-legendary-status" style="font-size:15px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
+          <button id="btn-s-epic-login" style="display:none; background:#0078f2; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1px;">Login to Epic Games</button>
+          <button id="btn-s-epic-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1px;">Logout</button>
         </div>
 
         <div class="settings-section">
           <h3>&#x1F7E3; GOG</h3>
-          <div id="s-gog-status" style="font-size:12px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
+          <div id="s-gog-status" style="font-size:15px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button id="btn-s-gog-login" style="display:none; background:#9b59d9; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Login to GOG</button>
-            <button id="btn-s-gog-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Logout</button>
+            <button id="btn-s-gog-login" style="display:none; background:#9b59d9; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1px;">Login to GOG</button>
+            <button id="btn-s-gog-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1px;">Logout</button>
           </div>
-          <p style="font-size:11px; color:var(--text_dim); margin-top:10px; line-height:1.6;">
+          <p style="font-size:14px; color:var(--text_dim); margin-top:10px; line-height:1.6;">
             <strong style="color:var(--text_sec)">gogdl</strong> is required to install GOG games.
-            Place the <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">gogdl</code> binary in the same folder as <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">GRINDER.AppImage</code>.
+            Place the <code style="font-size:14px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">gogdl</code> binary in the same folder as <code style="font-size:14px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">GRINDER.AppImage</code>.
           </p>
-          <div id="s-gogdl-status" style="font-size:11px; margin-top:4px;"></div>
+          <div id="s-gogdl-status" style="font-size:14px; margin-top:4px;"></div>
         </div>
 
         <div class="settings-section">
           <h3>&#x1F9AA; Proton Versions</h3>
-          <div id="proton-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--text_sec);">Not scanned yet.</div>
+          <div id="proton-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:6px; font-size:15px; color:var(--text_sec);">Not scanned yet.</div>
           <button class="btn-save-settings" id="btn-scan-proton" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); margin-bottom:4px;">&#x1F50D; Scan for Proton Versions</button>
-          <p style="font-size:11px; color:var(--text_dim); margin-top:4px; line-height:1.6;">
-            Scans Steam, Flatpak Steam, and <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">compatibilitytools.d</code> for installed Proton versions (including GE-Proton). Install new versions with <strong style="color:var(--text_sec)">ProtonUp-Qt</strong>.
+          <p style="font-size:14px; color:var(--text_dim); margin-top:4px; line-height:1.6;">
+            Scans Steam, Flatpak Steam, and <code style="font-size:14px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">compatibilitytools.d</code> for installed Proton versions (including GE-Proton). Install new versions with <strong style="color:var(--text_sec)">ProtonUp-Qt</strong>.
           </p>
         </div>
         <div class="settings-section">
           <h3>&#x1F9EA; External Tools</h3>
-          <div id="tools-info" style="font-size:12px; color: var(--text_sec); line-height: 1.7; margin-bottom: 14px;">Checking...</div>
+          <div id="tools-info" style="font-size:15px; color: var(--text_sec); line-height: 1.7; margin-bottom: 14px;">Checking...</div>
           <div id="umu-install-wrap" style="display:none; flex-direction:column; gap:8px;">
             <button class="btn-save-settings" id="btn-install-umu" style="background: transparent; border: 1px solid #66bb6a; color: #66bb6a; align-self: flex-start;">&#x2B07; Install umu-run via pipx</button>
-            <p style="font-size:11px; color:var(--text_dim); line-height:1.6; margin:0;">
-              Uses <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pipx install umu-launcher</code> (or <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pip install --user</code> if pipx is unavailable). Works on any distro.
+            <p style="font-size:14px; color:var(--text_dim); line-height:1.6; margin:0;">
+              Uses <code style="font-size:14px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pipx install umu-launcher</code> (or <code style="font-size:14px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pip install --user</code> if pipx is unavailable). Works on any distro.
             </p>
-            <div id="umu-install-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:6px; padding:12px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:200px; overflow-y:auto; line-height:1.5;"></div>
+            <div id="umu-install-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:6px; padding:12px; font-family:monospace; font-size:14px; color:#66bb6a; white-space:pre-wrap; max-height:200px; overflow-y:auto; line-height:1.5;"></div>
           </div>
         </div>
         <button class="btn-save-settings" id="btn-save-settings">Save Settings</button>
@@ -452,7 +477,7 @@
   <div id="modal-confirm" class="modal-overlay">
     <div class="modal-box" style="max-width:420px;">
       <h3 id="modal-confirm-title" style="margin:0 0 14px;"></h3>
-      <p id="modal-confirm-body" style="font-size:12px; color:var(--text_sec); line-height:1.7; margin:0 0 20px;"></p>
+      <p id="modal-confirm-body" style="font-size:15px; color:var(--text_sec); line-height:1.7; margin:0 0 20px;"></p>
       <div class="modal-actions">
         <button id="modal-confirm-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
         <button id="modal-confirm-ok" style="background:rgba(198,40,40,0.15); border:1px solid #c62828; color:#ef5350;">Uninstall</button>

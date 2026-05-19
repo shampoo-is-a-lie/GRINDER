@@ -960,6 +960,20 @@ document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); openModal(); }
 });
 
+// ── CLI search (launched from CNGM with a game name) ─────────────────────────
+window.api.onCliSearch(term => {
+    const input = document.getElementById('search-input');
+    if (!input) return;
+    input.value = term;
+    // Switch to games view and filter
+    document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.remove('active'));
+    document.querySelector('.nav-btn[data-view="games"]')?.classList.add('active');
+    document.getElementById('view-games').style.display    = 'flex';
+    document.getElementById('view-settings').style.display = 'none';
+    renderGames(filterGames());
+    input.focus();
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadProtonVersions();
 loadGames();

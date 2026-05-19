@@ -23,6 +23,8 @@ const allArgs    = process.argv;
 const launchIdx  = allArgs.indexOf('launch');
 const cliGameId  = launchIdx !== -1 ? allArgs[launchIdx + 1] : null;
 const cliMode    = !!cliGameId;
+const searchIdx  = allArgs.indexOf('search');
+const cliSearch  = searchIdx !== -1 ? allArgs.slice(searchIdx + 1).join(' ') : null;
 
 // ── Database ──────────────────────────────────────────────────────────────────
 function initDb() {
@@ -265,7 +267,10 @@ function createWindow() {
     win.setMenu(null);
     win.loadFile('index.html');
 
-    const showWin = () => { if (!win.isVisible()) win.show(); };
+    const showWin = () => {
+        if (!win.isVisible()) win.show();
+        if (cliSearch) win.webContents.send('cli-search', cliSearch);
+    };
     ipcMain.once('renderer-ready', showWin);
     win.once('ready-to-show', () => setTimeout(showWin, 2000));
 }
