@@ -368,7 +368,15 @@ window.api.onGogInstallProgress(data => {
     if (!log) return;
     log.textContent += data;
     log.scrollTop = log.scrollHeight;
-    setStatus(`Installing ${installingGame?.title || 'game'}...`);
+
+    const { pct, speed, eta } = parseProgress(data);
+    if (pct !== null) {
+        document.getElementById('install-progress-bar').style.width = pct + '%';
+        document.getElementById('install-pct-label').textContent = pct.toFixed(1) + '%';
+        setStatus(`Installing ${installingGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+    }
+    if (speed) document.getElementById('install-speed-label').textContent = speed;
+    if (eta)   document.getElementById('install-eta-label').textContent   = 'ETA ' + eta;
 });
 
 document.getElementById('btn-install-start')?.addEventListener('click', async () => {
