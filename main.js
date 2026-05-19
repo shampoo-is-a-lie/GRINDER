@@ -8,7 +8,7 @@ const Database = require('better-sqlite3');
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 const configDir = app.isPackaged
-    ? app.getPath('userData')          // ~/.config/GRINDER on Linux
+    ? app.getPath('userData')          // ~/.config/grinder on Linux (Electron uses lowercase app name)
     : path.join(__dirname, 'GRINDERConfig');
 
 const prefixesDir = path.join(configDir, 'prefixes');
@@ -663,12 +663,19 @@ async function getGogToken() {
 }
 
 function writeGogAuthConfig() {
-    const get = k => db.prepare("SELECT value FROM settings WHERE key=?").get(k)?.value || '';
+    const get    = k => db.prepare("SELECT value FROM settings WHERE key=?").get(k)?.value || '';
+    const expiry = parseInt(get('gog_token_expiry') || '0');
+    // gogdl expects the Heroic auth format: keyed by client_id
     const authPath = path.join(configDir, 'gogdl_auth.json');
     fs.writeFileSync(authPath, JSON.stringify({
-        access_token:  get('gog_access_token'),
-        refresh_token: get('gog_refresh_token'),
-        user_id:       get('gog_user_id'),
+        [GOG_CLIENT_ID]: {
+            access_token:  get('gog_access_token'),
+            refresh_token: get('gog_refresh_token'),
+            user_id:       get('gog_user_id'),
+            token_type:    'Bearer',
+            expires_in:    Math.max(0, Math.floor((expiry - Date.now()) / 1000)),
+            loginTime:     Math.floor((expiry - 3600000) / 1000),
+        }
     }));
     return authPath;
 }
@@ -792,13 +799,13 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
     const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
 
     return new Promise(resolve => {
-        send(`Running: ${gogdl} download ${appId} --platform ${platform} --path ${dir}\n`);
+        send(`Running: ${gogdl} --auth-config-path <auth> download ${appId} --platform ${platform} --path ${dir}\n`);
         activeGogInstallProc = spawn(gogdl, [
-            'download', appId,
-            '--platform',         platform,
-            '--path',             dir,
-            '--lang',             'en-US',
             '--auth-config-path', authPath,
+            'download', appId,
+            '--platform', platform,
+            '--path',     dir,
+            '--lang',     'en-US',
         ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
         activeGogInstallProc.stdout.on('data', send);
