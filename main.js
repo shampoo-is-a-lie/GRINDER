@@ -304,6 +304,106 @@ ipcMain.handle('get-config-dir', () => configDir);
 // Proton
 ipcMain.handle('scan-proton', () => scanProtonVersions());
 
+// ── Legendary / Epic ──────────────────────────────────────────────────────────
+
+function runLegendary(args) {
+    const leg = findLegendary();
+    if (!leg) return Promise.resolve({ ok: false, error: 'legendary not found' });
+    return new Promise(resolve => {
+        let out = '', err = '';
+        const proc = spawn(leg, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+        proc.stdout.on('data', d => out += d);
+        proc.stderr.on('data', d => err += d);
+        proc.on('close', code => resolve({ ok: code === 0, stdout: out, stderr: err, code }));
+        proc.on('error', e => resolve({ ok: false, error: e.message }));
+    });
+}
+
+// Check if logged in
+ipcMain.handle('legendary-status', async () => {
+    const r = await runLegendary(['status']);
+    if (!r.ok && r.error) return { ok: false, error: r.error };
+    const text = r.stdout + r.stderr;
+    const loggedIn = !text.includes('<not logged in>');
+    const accountMatch = text.match(/Epic account:\s*(.+)/);
+    const gamesMatch   = text.match(/Games available:\s*(\d+)/);
+    return {
+        ok: true,
+        logged_in: loggedIn,
+        account:   loggedIn ? (accountMatch?.[1]?.trim() || 'unknown') : null,
+        games_available: parseInt(gamesMatch?.[1] || '0'),
+    };
+});
+
+// Open Epic login window and authenticate legendary
+ipcMain.handle('legendary-login', event => {
+    const AUTH_URL = 'https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9&responseType=code';
+    const leg = findLegendary();
+    if (!leg) return Promise.resolve({ ok: false, error: 'legendary not found' });
+
+    return new Promise(resolve => {
+        let resolved = false;
+
+        const authWin = new BrowserWindow({
+            width: 520, height: 720, title: 'Login to Epic Games',
+            webPreferences: { nodeIntegration: false, contextIsolation: true },
+        });
+        authWin.setMenu(null);
+        authWin.loadURL(AUTH_URL);
+
+        async function tryExtract() {
+            if (resolved) return;
+            try {
+                const text = await authWin.webContents.executeJavaScript('document.body.innerText');
+                const m = text.match(/"exchangeCode"\s*:\s*"([^"]+)"/);
+                if (!m) return;
+                resolved = true;
+                authWin.close();
+                const send = d => { try { event.sender.send('legendary-login-progress', String(d)); } catch {} };
+                send('Got exchange code, authenticating with legendary...\n');
+                const proc = spawn(leg, ['auth', '--code', m[1]], { stdio: ['ignore', 'pipe', 'pipe'] });
+                proc.stdout.on('data', send);
+                proc.stderr.on('data', send);
+                proc.on('close', code => resolve({ ok: code === 0 }));
+                proc.on('error', e => resolve({ ok: false, error: e.message }));
+            } catch {}
+        }
+
+        authWin.webContents.on('did-finish-load', tryExtract);
+        authWin.webContents.on('did-navigate', tryExtract);
+        authWin.on('closed', () => { if (!resolved) resolve({ ok: false, error: 'Window closed before login completed.' }); });
+    });
+});
+
+// List installed Epic games
+ipcMain.handle('legendary-list-installed', async () => {
+    const r = await runLegendary(['list-installed', '--json']);
+    if (!r.ok && r.error) return { ok: false, error: r.error };
+    try {
+        const all = JSON.parse(r.stdout);
+        return { ok: true, games: all.filter(g => !g.is_dlc) };
+    } catch { return { ok: false, error: 'Failed to parse legendary output.' }; }
+});
+
+// Import selected games into GRINDER DB
+ipcMain.handle('legendary-import', (_, games) => {
+    const stmt = db.prepare(`
+        INSERT OR IGNORE INTO games (id, title, store, app_id, install_path, executable, installed, version)
+        VALUES (?, ?, 'epic', ?, ?, ?, 1, ?)
+    `);
+    const tx = db.transaction(list => {
+        let n = 0;
+        for (const g of list) {
+            stmt.run('epic_' + g.app_name, g.title, g.app_name,
+                     g.install_path || null, g.executable || null, g.version || null);
+            n++;
+        }
+        return n;
+    });
+    try { return { ok: true, count: tx(games) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+});
+
 // umu-run installer — tries pipx first, falls back to pip --user
 ipcMain.handle('install-umu', (event) => {
     const pipx = which('pipx');

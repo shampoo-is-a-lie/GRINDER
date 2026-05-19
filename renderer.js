@@ -215,6 +215,164 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     await loadGames();
 });
 
+// ── Legendary / Epic ──────────────────────────────────────────────────────────
+let legendaryStatus = null;
+
+async function refreshLegendaryStatus() {
+    legendaryStatus = await window.api.legendaryStatus();
+    const el = document.getElementById('s-legendary-status');
+    const loginBtn  = document.getElementById('btn-s-epic-login');
+    const logoutBtn = document.getElementById('btn-s-epic-logout');
+    if (!el) return;
+    if (!legendaryStatus.ok) {
+        el.innerHTML = `<span style="color:#ef5350">legendary not found.</span>`;
+        return;
+    }
+    if (legendaryStatus.logged_in) {
+        el.innerHTML = `<span style="color:#66bb6a">✓ Logged in as <strong>${legendaryStatus.account}</strong></span>`;
+        loginBtn.style.display  = 'none';
+        logoutBtn.style.display = 'inline-block';
+    } else {
+        el.innerHTML = `<span style="color:var(--text_dim)">Not logged in to Epic Games.</span>`;
+        loginBtn.style.display  = 'inline-block';
+        logoutBtn.style.display = 'none';
+    }
+}
+
+// Login flow (called from both Settings and Import modal)
+async function doEpicLogin(progressElId) {
+    const out = document.getElementById(progressElId);
+    if (out) { out.style.display = 'block'; out.textContent = 'Opening Epic login window...\n'; }
+
+    window.api.onLegendaryLoginProgress(data => {
+        if (out) { out.textContent += data; out.scrollTop = out.scrollHeight; }
+    });
+
+    const result = await window.api.legendaryLogin();
+    if (result.ok) {
+        if (out) out.textContent += '\n✓ Login successful!\n';
+        await refreshLegendaryStatus();
+        return true;
+    } else {
+        if (out) out.textContent += `\n✗ ${result.error || 'Login failed.'}\n`;
+        return false;
+    }
+}
+
+document.getElementById('btn-s-epic-login')?.addEventListener('click', () => doEpicLogin(null));
+document.getElementById('btn-s-epic-logout')?.addEventListener('click', async () => {
+    await window.api.legendaryStatus(); // placeholder — legendary logout via CLI
+    setStatus('Logged out of Epic.');
+    await refreshLegendaryStatus();
+});
+
+// ── Import modal ──────────────────────────────────────────────────────────────
+const modalImport   = document.getElementById('modal-import');
+let importGames     = [];
+let importSelected  = new Set();
+
+function openImportModal() { modalImport.classList.add('active'); loadImportData(); }
+function closeImportModal() { modalImport.classList.remove('active'); }
+
+document.getElementById('btn-import-legendary')?.addEventListener('click', openImportModal);
+document.getElementById('btn-import-cancel')?.addEventListener('click', closeImportModal);
+modalImport?.addEventListener('click', e => { if (e.target === modalImport) closeImportModal(); });
+
+document.getElementById('btn-epic-login')?.addEventListener('click', async () => {
+    document.getElementById('btn-epic-login').disabled = true;
+    document.getElementById('btn-epic-login').textContent = '⏳ Opening login window...';
+    const ok = await doEpicLogin('login-output');
+    document.getElementById('btn-epic-login').disabled = false;
+    document.getElementById('btn-epic-login').textContent = ok ? '✓ Logged in' : 'Login to Epic Games';
+    if (ok) loadImportData();
+});
+
+async function loadImportData() {
+    const status = legendaryStatus || await window.api.legendaryStatus();
+    const loginPanel  = document.getElementById('import-login-panel');
+    const gamesPanel  = document.getElementById('import-games-panel');
+    const emptyPanel  = document.getElementById('import-empty');
+    const confirmBtn  = document.getElementById('btn-import-confirm');
+    const accountEl   = document.getElementById('import-account');
+
+    if (!status.logged_in) {
+        loginPanel.style.display  = 'block';
+        gamesPanel.style.display  = 'none';
+        emptyPanel.style.display  = 'none';
+        confirmBtn.style.display  = 'none';
+        return;
+    }
+
+    loginPanel.style.display = 'none';
+    accountEl.textContent    = `✓ ${status.account}`;
+    setStatus('Fetching installed Epic games...');
+
+    const result = await window.api.legendaryListInstalled();
+    if (!result.ok || !result.games.length) {
+        gamesPanel.style.display = 'none';
+        emptyPanel.style.display = 'block';
+        confirmBtn.style.display = 'none';
+        setStatus(result.ok ? 'No installed Epic games found.' : `Error: ${result.error}`);
+        return;
+    }
+
+    importGames = result.games;
+    importSelected = new Set(importGames.map(g => g.app_name)); // select all by default
+    gamesPanel.style.display = 'flex';
+    emptyPanel.style.display = 'none';
+    confirmBtn.style.display = 'inline-block';
+    renderImportList();
+    setStatus(`Found ${importGames.length} installed Epic game${importGames.length !== 1 ? 's' : ''}.`);
+}
+
+function renderImportList() {
+    const list = document.getElementById('import-game-list');
+    const countEl = document.getElementById('import-sel-count');
+    countEl.textContent = `${importSelected.size} / ${importGames.length} selected`;
+
+    // Check which are already in GRINDER DB
+    list.innerHTML = importGames.map(g => {
+        const alreadyIn = allGames.some(ag => ag.app_id === g.app_name && ag.store === 'epic');
+        const checked   = importSelected.has(g.app_name);
+        return `
+        <label style="display:flex; align-items:center; gap:10px; padding:7px 10px; background:rgba(0,0,0,0.2); border-radius:5px; cursor:${alreadyIn ? 'default' : 'pointer'}; border:1px solid var(--border_solid);">
+            <input type="checkbox" data-appname="${g.app_name}" ${checked && !alreadyIn ? 'checked' : ''} ${alreadyIn ? 'disabled' : ''} style="accent-color:var(--accent); width:14px; height:14px; flex-shrink:0;">
+            <span style="flex:1; font-size:12px; font-weight:700; color:${alreadyIn ? 'var(--text_dim)' : 'var(--text_main)'};">${g.title}</span>
+            <span style="font-size:10px; color:var(--text_dim);">${g.version || ''}</span>
+            ${alreadyIn ? '<span style="font-size:10px; color:#66bb6a; font-weight:700;">Already imported</span>' : ''}
+        </label>`;
+    }).join('');
+
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) importSelected.add(cb.dataset.appname);
+            else            importSelected.delete(cb.dataset.appname);
+            document.getElementById('import-sel-count').textContent = `${importSelected.size} / ${importGames.length} selected`;
+        });
+    });
+}
+
+document.getElementById('btn-import-select-all')?.addEventListener('click', () => {
+    importSelected = new Set(importGames.filter(g => !allGames.some(ag => ag.app_id === g.app_name)).map(g => g.app_name));
+    renderImportList();
+});
+document.getElementById('btn-import-select-none')?.addEventListener('click', () => {
+    importSelected.clear(); renderImportList();
+});
+
+document.getElementById('btn-import-confirm')?.addEventListener('click', async () => {
+    const toImport = importGames.filter(g => importSelected.has(g.app_name));
+    if (!toImport.length) { setStatus('Nothing selected.'); return; }
+    const result = await window.api.legendaryImport(toImport);
+    if (result.ok) {
+        setStatus(`Imported ${result.count} game${result.count !== 1 ? 's' : ''} from Epic.`);
+        closeImportModal();
+        await loadGames();
+    } else {
+        setStatus(`Import failed: ${result.error}`);
+    }
+});
+
 // ── umu-run installer ─────────────────────────────────────────────────────────
 window.api.onUmuInstallProgress(data => {
     const out = document.getElementById('umu-install-output');
@@ -322,7 +480,7 @@ async function loadSettings() {
     document.getElementById('s-proton').value     = proton     || '';
     document.getElementById('s-prefix-dir').value = prefixDir  || '';
     renderProtonList(protonVersions);
-    await checkTools();
+    await Promise.all([checkTools(), refreshLegendaryStatus()]);
 }
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
@@ -343,3 +501,4 @@ document.addEventListener('keydown', e => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadProtonVersions();
 loadGames();
+refreshLegendaryStatus();

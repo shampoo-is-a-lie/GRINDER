@@ -171,6 +171,41 @@
 </head>
 <body>
 
+  <!-- Import from Legendary Modal -->
+  <div id="modal-import" class="modal-overlay">
+    <div class="modal-box" style="width:620px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column;">
+      <h3 id="import-title">Import from Legendary</h3>
+
+      <!-- Login panel (shown when not logged in) -->
+      <div id="import-login-panel">
+        <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
+          GRINDER uses <strong>legendary</strong> to manage your Epic Games library.<br>
+          Log in once and your library syncs automatically.
+        </p>
+        <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
+        <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
+      </div>
+
+      <!-- Game list panel (shown when logged in) -->
+      <div id="import-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span id="import-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
+          <button id="btn-import-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
+          <button id="btn-import-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
+          <span id="import-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+        </div>
+        <div id="import-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:340px;"></div>
+      </div>
+
+      <div id="import-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No installed Epic games found. Install games via Legendary first.</div>
+
+      <div class="modal-actions" style="margin-top:12px;">
+        <button class="btn-cancel" id="btn-import-cancel">Close</button>
+        <button class="btn-confirm" id="btn-import-confirm" style="display:none;">Import Selected</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Add/Edit Game Modal -->
   <div id="modal-game" class="modal-overlay">
     <div class="modal-box">
@@ -237,6 +272,7 @@
         <div id="games-toolbar">
           <input id="search-input" placeholder="Search games..." autocomplete="off">
           <button id="btn-add-game">+ Add Game</button>
+          <button id="btn-import-legendary" style="background:transparent; border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import installed Epic games from Legendary">&#x2B07; Epic Import</button>
         </div>
         <div id="games-list"></div>
       </div>
@@ -256,6 +292,13 @@
             <p>Where per-game Wine prefixes are created by default. Each game gets its own subfolder named by game ID.</p>
           </div>
         </div>
+        <div class="settings-section">
+          <h3>&#x1F3AE; Epic Games (Legendary)</h3>
+          <div id="s-legendary-status" style="font-size:12px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
+          <button id="btn-s-epic-login" style="display:none; background:#0078f2; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Login to Epic Games</button>
+          <button id="btn-s-epic-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Logout</button>
+        </div>
+
         <div class="settings-section">
           <h3>&#x1F9AA; Proton Versions</h3>
           <div id="proton-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--text_sec);">Not scanned yet.</div>

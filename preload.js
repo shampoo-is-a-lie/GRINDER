@@ -28,4 +28,11 @@ contextBridge.exposeInMainWorld('api', {
     scanProton:   () => ipcRenderer.invoke('scan-proton'),
     installUmu:   () => ipcRenderer.invoke('install-umu'),
     onUmuInstallProgress: (cb) => ipcRenderer.on('umu-install-progress', (_, data) => cb(data)),
+
+    // Legendary / Epic
+    legendaryStatus:       () => ipcRenderer.invoke('legendary-status'),
+    legendaryLogin:        () => ipcRenderer.invoke('legendary-login'),
+    legendaryListInstalled:() => ipcRenderer.invoke('legendary-list-installed'),
+    legendaryImport:       (games) => ipcRenderer.invoke('legendary-import', games),
+    onLegendaryLoginProgress: (cb) => ipcRenderer.on('legendary-login-progress', (_, d) => cb(d)),
 });
