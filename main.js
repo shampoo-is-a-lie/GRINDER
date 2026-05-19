@@ -330,9 +330,26 @@ ipcMain.handle('uninstall-game-files', async (_, id) => {
     const errors = [];
 
     const installPath = expandTilde(game.install_path || '');
+    const defaultBase = expandTilde(
+        db.prepare("SELECT value FROM settings WHERE key='default_install_dir'").get()?.value
+        || path.join(HOME, 'Games', 'CafeNeurotico')
+    );
+
+    // Safety guard: never delete the base install directory or any ancestor of it.
+    // A valid game path must be at least one level deeper than the base.
+    const isSafe = installPath &&
+        installPath !== defaultBase &&
+        installPath !== HOME &&
+        installPath !== '/' &&
+        installPath.startsWith(defaultBase + path.sep);
+
     if (installPath && fs.existsSync(installPath)) {
-        try { fs.rmSync(installPath, { recursive: true, force: true }); }
-        catch (e) { errors.push(`Game files: ${e.message}`); }
+        if (!isSafe) {
+            errors.push(`Refusing to delete "${installPath}" — looks like a base directory, not a game folder. Remove files manually.`);
+        } else {
+            try { fs.rmSync(installPath, { recursive: true, force: true }); }
+            catch (e) { errors.push(`Game files: ${e.message}`); }
+        }
     }
 
     const prefixPath = expandTilde(game.prefix_path) || (() => {

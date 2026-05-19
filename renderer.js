@@ -403,8 +403,11 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     if (result.ok) {
         if (installingGame.store === 'gog') {
             const gi = result.gameInfo;
+            // Only store install_path if we found the actual game subfolder via goggame-*.info.
+            // Falling back to the base dir (result.install_dir) would make uninstall delete
+            // the entire CafeNeurotico folder — so leave it null if we can't determine the subdir.
             await window.api.updateGame(installingGame.id, {
-                install_path: gi?.install_path || result.install_dir || dir,
+                install_path: gi?.install_path || null,
                 executable:   gi?.executable   || null,
                 installed:    1,
             });
