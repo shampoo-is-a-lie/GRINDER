@@ -386,13 +386,22 @@ ipcMain.handle('check-tools', () => {
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
 
-ipcMain.handle('verify-installs', () => {
-    const installed = db.prepare("SELECT id, install_path FROM games WHERE installed=1").all();
+ipcMain.handle('verify-installs', async () => {
+    const installed = db.prepare("SELECT id, title, store, app_id, install_path FROM games WHERE installed=1").all();
     let reset = 0;
     for (const g of installed) {
         const p = expandTilde(g.install_path || '');
         if (!p || !fs.existsSync(p)) {
             db.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(g.id);
+            // Also remove legendary's stale record for Epic games
+            if (g.store === 'epic' && g.app_id) {
+                const leg = findLegendary();
+                if (leg) await new Promise(resolve => {
+                    const proc = spawn(leg, ['uninstall', g.app_id, '-y'], { stdio: 'ignore' });
+                    proc.on('close', resolve);
+                    proc.on('error', resolve);
+                });
+            }
             reset++;
         }
     }
@@ -555,15 +564,27 @@ ipcMain.handle('select-directory', async () => {
 });
 
 // Start installing a game via legendary
-ipcMain.handle('legendary-install', (event, appName, installDir) => {
+ipcMain.handle('legendary-install', async (event, appName, installDir) => {
     if (activeInstallProc) return { ok: false, error: 'An installation is already in progress.' };
     const leg = findLegendary();
     if (!leg) return { ok: false, error: 'legendary not found.' };
 
     const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
-    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+
+    // Validate write access before starting
+    try { fs.accessSync(dir, fs.constants.W_OK); }
+    catch { return { ok: false, error: `No write access to ${dir}` }; }
 
     const send = d => { try { event.sender.send('install-progress', String(d)); } catch {} };
+
+    // Clear any stale legendary record for this game so it installs fresh
+    send(`Clearing any existing legendary records for ${appName}...\n`);
+    await new Promise(resolve => {
+        const proc = spawn(leg, ['uninstall', appName, '-y'], { stdio: 'ignore' });
+        proc.on('close', resolve);
+        proc.on('error', resolve);
+    });
 
     return new Promise(resolve => {
         // -y skips interactive prompts; --skip-sdl skips SDL check
