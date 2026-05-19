@@ -162,7 +162,12 @@ async function launchGame(gameId) {
     if (!game)           throw new Error(`Game "${gameId}" not found in GRINDER database.`);
     if (!game.installed) throw new Error(`"${game.title}" is not marked as installed.`);
 
-    const prefix = expandTilde(game.prefix_path) || path.join(prefixesDir, gameId);
+    const prefix = expandTilde(game.prefix_path) || (() => {
+        const legacy = path.join(prefixesDir, gameId);
+        if (fs.existsSync(legacy)) return legacy;
+        const safeName = (game.title || gameId).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || gameId;
+        return path.join(prefixesDir, safeName);
+    })();
     const proton = expandTilde(game.proton_path)
         || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value
         || '';
@@ -330,7 +335,12 @@ ipcMain.handle('uninstall-game-files', async (_, id) => {
         catch (e) { errors.push(`Game files: ${e.message}`); }
     }
 
-    const prefixPath = expandTilde(game.prefix_path) || path.join(prefixesDir, id);
+    const prefixPath = expandTilde(game.prefix_path) || (() => {
+        const legacy = path.join(prefixesDir, id);
+        if (fs.existsSync(legacy)) return legacy;
+        const safeName = (game.title || id).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || id;
+        return path.join(prefixesDir, safeName);
+    })();
     if (fs.existsSync(prefixPath)) {
         try { fs.rmSync(prefixPath, { recursive: true, force: true }); }
         catch (e) { errors.push(`Prefix: ${e.message}`); }
