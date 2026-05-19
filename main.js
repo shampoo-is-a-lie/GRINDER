@@ -863,14 +863,19 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
     const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
 
     return new Promise(resolve => {
-        send(`Running: ${gogdl} --auth-config-path <auth> download ${appId} --platform ${platform} --path ${dir}\n`);
+        send(`Running: gogdl --auth-config-path <auth> download ${appId} --platform ${platform} --path ${dir}\n`);
         activeGogInstallProc = spawn(gogdl, [
             '--auth-config-path', authPath,
             'download', appId,
             '--platform', platform,
             '--path',     dir,
             '--lang',     'en-US',
-        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+        ], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            // Point gogdl to GRINDER's own config dir so manifests don't
+            // collide with Heroic's cached manifests causing false "Nothing to do"
+            env: { ...process.env, GOGDL_CONFIG_PATH: configDir },
+        });
 
         activeGogInstallProc.stdout.on('data', send);
         activeGogInstallProc.stderr.on('data', send);

@@ -87,7 +87,7 @@ GRINDER bundles the following tool:
 | Tool | License |
 |---|---|
 | [legendary](https://github.com/derrod/legendary) | [GPL v3](https://github.com/derrod/legendary/blob/master/LICENSE) |
-| [gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) | [GPL v3](https://github.com/Heroic-Games-Launcher/heroic-gogdl/blob/main/LICENSE) |
+| [gogdl](https://github.com/shampoo-is-a-lie/gogdl) (fork of [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl)) | [GPL v3](https://github.com/shampoo-is-a-lie/gogdl/blob/grinder/LICENSE) |
 
 ## License
 
