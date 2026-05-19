@@ -26,4 +26,6 @@ contextBridge.exposeInMainWorld('api', {
     openPath:     (p) => ipcRenderer.invoke('open-path', p),
     getConfigDir: () => ipcRenderer.invoke('get-config-dir'),
     scanProton:   () => ipcRenderer.invoke('scan-proton'),
+    installUmu:   () => ipcRenderer.invoke('install-umu'),
+    onUmuInstallProgress: (cb) => ipcRenderer.on('umu-install-progress', (_, data) => cb(data)),
 });

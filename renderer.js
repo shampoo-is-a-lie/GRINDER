@@ -45,6 +45,10 @@ async function checkTools() {
     setDot('status-umu',       tools.umu);
     setDot('status-wine',      tools.wine);
 
+    // Show install button only when umu is missing
+    const umuWrap = document.getElementById('umu-install-wrap');
+    if (umuWrap) umuWrap.style.display = tools.umu ? 'none' : 'flex';
+
     const info = document.getElementById('tools-info');
     if (!info) return;
     info.innerHTML = [
@@ -209,6 +213,40 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     }
     closeModal();
     await loadGames();
+});
+
+// ── umu-run installer ─────────────────────────────────────────────────────────
+window.api.onUmuInstallProgress(data => {
+    const out = document.getElementById('umu-install-output');
+    if (!out) return;
+    out.style.display = 'block';
+    out.textContent += data;
+    out.scrollTop = out.scrollHeight;
+});
+
+document.getElementById('btn-install-umu')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-install-umu');
+    const out = document.getElementById('umu-install-output');
+    btn.disabled = true;
+    btn.textContent = '⏳ Installing...';
+    out.style.display = 'block';
+    out.textContent = '';
+    setStatus('Installing umu-run...');
+
+    const result = await window.api.installUmu();
+
+    if (result.ok) {
+        out.textContent += `\n✓ Installed successfully via ${result.method}.\n  Restart GRINDER if umu-run is not detected yet.`;
+        btn.textContent = '✓ Installed';
+        btn.style.color = '#66bb6a';
+        setStatus('umu-run installed. Re-checking tools...');
+        await checkTools();
+    } else {
+        out.textContent += `\n✗ Failed (exit ${result.exitCode ?? 'error'}).\n${result.error || ''}`;
+        btn.textContent = '✗ Failed — try again';
+        btn.disabled = false;
+        setStatus('umu-run installation failed.');
+    }
 });
 
 // ── Proton versions ───────────────────────────────────────────────────────────

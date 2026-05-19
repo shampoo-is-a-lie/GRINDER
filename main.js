@@ -303,3 +303,29 @@ ipcMain.handle('get-config-dir', () => configDir);
 
 // Proton
 ipcMain.handle('scan-proton', () => scanProtonVersions());
+
+// umu-run installer — tries pipx first, falls back to pip --user
+ipcMain.handle('install-umu', (event) => {
+    const pipx = which('pipx');
+    const pip  = which('pip3') || which('pip');
+
+    if (!pipx && !pip) {
+        return { ok: false, error: 'Neither pipx nor pip found. Install pipx first:\n  Fedora: sudo dnf install pipx\n  Debian/Ubuntu: sudo apt install pipx\n  Arch: sudo pacman -S python-pipx' };
+    }
+
+    const cmd  = pipx || pip;
+    const args = pipx ? ['install', 'umu-launcher'] : ['install', '--user', 'umu-launcher'];
+
+    return new Promise(resolve => {
+        const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        const send = (data) => {
+            try { event.sender.send('umu-install-progress', String(data)); } catch {}
+        };
+
+        proc.stdout.on('data', send);
+        proc.stderr.on('data', send);
+        proc.on('close', code => resolve({ ok: code === 0, exitCode: code, method: pipx ? 'pipx' : 'pip --user' }));
+        proc.on('error', err => resolve({ ok: false, error: err.message }));
+    });
+});

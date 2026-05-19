@@ -266,7 +266,14 @@
         </div>
         <div class="settings-section">
           <h3>&#x1F9EA; External Tools</h3>
-          <div id="tools-info" style="font-size:12px; color: var(--text_sec); line-height: 1.7;">Checking...</div>
+          <div id="tools-info" style="font-size:12px; color: var(--text_sec); line-height: 1.7; margin-bottom: 14px;">Checking...</div>
+          <div id="umu-install-wrap" style="display:none; flex-direction:column; gap:8px;">
+            <button class="btn-save-settings" id="btn-install-umu" style="background: transparent; border: 1px solid #66bb6a; color: #66bb6a; align-self: flex-start;">&#x2B07; Install umu-run via pipx</button>
+            <p style="font-size:11px; color:var(--text_dim); line-height:1.6; margin:0;">
+              Uses <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pipx install umu-launcher</code> (or <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">pip install --user</code> if pipx is unavailable). Works on any distro.
+            </p>
+            <div id="umu-install-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:6px; padding:12px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:200px; overflow-y:auto; line-height:1.5;"></div>
+          </div>
         </div>
         <button class="btn-save-settings" id="btn-save-settings">Save Settings</button>
       </div>
