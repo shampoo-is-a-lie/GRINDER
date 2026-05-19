@@ -204,17 +204,68 @@ function renderGames(games) {
     });
 }
 
+// ── Filters ───────────────────────────────────────────────────────────────────
+let installFilter = 'all'; // 'all' | 'installed' | 'uninstalled'
+let storeFilter   = 'all'; // 'all' | 'epic' | 'gog' | 'custom'
+
+function buildFilterBar() {
+    const bar = document.getElementById('filter-bar');
+    if (!bar) return;
+
+    const stores = [...new Set(allGames.map(g => g.store).filter(Boolean))].sort();
+    const storeButtons = stores.map(s => {
+        const cls = `fs-${s}`;
+        const label = s.charAt(0).toUpperCase() + s.slice(1);
+        return `<button class="filter-btn ${cls}" data-store="${s}">${label}</button>`;
+    }).join('');
+
+    bar.innerHTML = `
+        <button class="filter-btn fi-all ${installFilter==='all'?'active':''}" data-install="all">All</button>
+        <button class="filter-btn fi-installed ${installFilter==='installed'?'active':''}" data-install="installed">● Installed</button>
+        <button class="filter-btn fi-uninst ${installFilter==='uninstalled'?'active':''}" data-install="uninstalled">○ Not installed</button>
+        <div class="filter-sep"></div>
+        ${storeButtons}
+    `;
+
+    bar.querySelectorAll('[data-store]').forEach(btn => {
+        if (btn.dataset.store === storeFilter) btn.classList.add('active');
+    });
+
+    bar.querySelectorAll('[data-install]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            installFilter = btn.dataset.install;
+            bar.querySelectorAll('[data-install]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderGames(filterGames());
+        });
+    });
+
+    bar.querySelectorAll('[data-store]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            storeFilter = storeFilter === btn.dataset.store ? 'all' : btn.dataset.store;
+            bar.querySelectorAll('[data-store]').forEach(b => b.classList.remove('active'));
+            if (storeFilter !== 'all') btn.classList.add('active');
+            renderGames(filterGames());
+        });
+    });
+}
+
 function filterGames() {
     const q = document.getElementById('search-input').value.toLowerCase();
-    return q ? allGames.filter(g =>
-        g.title.toLowerCase().includes(q) ||
-        (g.store||'').toLowerCase().includes(q) ||
-        (g.app_id||'').toLowerCase().includes(q)
-    ) : allGames;
+    return allGames.filter(g => {
+        if (q && !g.title.toLowerCase().includes(q) &&
+            !(g.store||'').toLowerCase().includes(q) &&
+            !(g.app_id||'').toLowerCase().includes(q)) return false;
+        if (installFilter === 'installed'   && !g.installed) return false;
+        if (installFilter === 'uninstalled' &&  g.installed) return false;
+        if (storeFilter !== 'all' && (g.store||'').toLowerCase() !== storeFilter) return false;
+        return true;
+    });
 }
 
 async function loadGames() {
     allGames = await window.api.getGames();
+    buildFilterBar();
     renderGames(filterGames());
     loadGameSizes();
 }

@@ -199,6 +199,27 @@
     .modal-row input, .modal-row select { font-size: 15px; }
     .modal-actions button { font-size: 14px; }
     #statusbar { font-size: 13px; }
+    /* ── Filter bar ── */
+    #filter-bar {
+      padding: 7px 16px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border_solid); background: rgba(0,0,0,0.12); flex-shrink: 0;
+    }
+    .filter-btn {
+      font-family: 'Raleway', sans-serif; font-weight: 900; font-size: 10px;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 12px;
+      border: 1px solid var(--border_solid); background: transparent;
+      color: var(--text_dim); cursor: pointer; transition: 0.15s;
+    }
+    .filter-btn:hover { color: var(--text_sec); border-color: var(--text_dim); }
+    .filter-btn.active             { background: rgba(139,90,43,0.25); color: var(--text_main); border-color: var(--accent); }
+    .filter-btn.fi-installed.active  { border-color: #66bb6a; color: #66bb6a; background: rgba(102,187,106,0.1); }
+    .filter-btn.fi-uninst.active     { border-color: var(--text_dim); color: var(--text_sec); background: rgba(0,0,0,0.2); }
+    .filter-btn.fs-epic.active       { border-color: #00c88c; color: #00c88c; background: rgba(0,200,140,0.08); }
+    .filter-btn.fs-gog.active        { border-color: #9b59d9; color: #9b59d9; background: rgba(155,89,217,0.08); }
+    .filter-btn.fs-custom.active     { border-color: var(--accent); color: var(--accent); background: rgba(212,129,58,0.08); }
+    .filter-sep { width: 1px; height: 14px; background: var(--border_solid); margin: 0 3px; flex-shrink: 0; }
+
     /* Titlebar pinned to original sizes */
     .titlebar-brand { font-size: 13px !important; }
     .titlebar-brand span { font-size: 10px !important; }
@@ -405,6 +426,7 @@
           <button id="btn-import-gog" style="background:transparent; border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import GOG library">&#x2B07; GOG</button>
           <button id="btn-verify-installs" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">&#x2713; Verify</button>
         </div>
+        <div id="filter-bar"></div>
         <div id="games-list"></div>
       </div>
 
