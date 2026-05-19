@@ -436,7 +436,7 @@ ipcMain.handle('legendary-list-installed', async () => {
 ipcMain.handle('legendary-import', (_, games) => {
     const stmt = db.prepare(`
         INSERT OR IGNORE INTO games (id, title, store, app_id, install_path, executable, installed, version)
-        VALUES (?, ?, 'epic', ?, ?, ?, 1, ?)
+        VALUES (?, ?, 'epic', ?, ?, ?, 0, ?)
     `);
     const tx = db.transaction(list => {
         let n = 0;
