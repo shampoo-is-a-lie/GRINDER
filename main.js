@@ -901,15 +901,34 @@ ipcMain.handle('gog-list-owned', async () => {
 });
 
 ipcMain.handle('gog-import', (_, games) => {
-    const stmt = db.prepare(
+    const stmtInsert = db.prepare(
         "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, platforms, installed) VALUES (?, ?, 'gog', ?, ?, ?, 0)"
+    );
+    // Always update platforms so re-importing populates missing data
+    const stmtPlatforms = db.prepare(
+        "UPDATE games SET platforms = ? WHERE app_id = ? AND store = 'gog'"
     );
     const tx = db.transaction(list => {
         let n = 0;
-        for (const g of list) { stmt.run('gog_' + g.id, g.title, g.id, g.platform || 'windows', g.platforms || g.platform || 'windows'); n++; }
+        for (const g of list) {
+            const plats = g.platforms || g.platform || 'windows';
+            stmtInsert.run('gog_' + g.id, g.title, g.id, g.platform || 'windows', plats);
+            stmtPlatforms.run(plats, g.id);
+            n++;
+        }
         return n;
     });
     try { return { ok: true, count: tx(games) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Update platforms column for all existing GOG games from a fresh library fetch
+ipcMain.handle('gog-sync-platforms', (_, games) => {
+    const stmt = db.prepare("UPDATE games SET platforms = ? WHERE app_id = ? AND store = 'gog'");
+    const tx = db.transaction(list => {
+        for (const g of list) stmt.run(g.platforms || g.platform || 'windows', g.id);
+    });
+    try { tx(games); return { ok: true }; }
     catch (e) { return { ok: false, error: e.message }; }
 });
 

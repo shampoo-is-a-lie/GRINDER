@@ -746,6 +746,10 @@ async function loadGogImportData() {
 
     gogImportGames    = result.games;
     gogImportSelected = new Set(gogImportGames.map(g => g.id));
+
+    // Silently update platforms column for games already in the library
+    window.api.gogSyncPlatforms(gogImportGames).then(() => loadGames());
+
     gamesPanel.style.display = 'flex';
     emptyPanel.style.display = 'none';
     confirmBtn.style.display = '';
