@@ -42,6 +42,7 @@ async function checkTools() {
         el.title = value || 'Not found';
     }
     setDot('status-legendary', tools.legendary);
+    setDot('status-gogdl',     tools.gogdl);
     setDot('status-umu',       tools.umu);
     setDot('status-wine',      tools.wine);
 
@@ -58,6 +59,13 @@ async function checkTools() {
                     ? `<span style="color:#66bb6a">✓ bundled (${tools.legendary})</span>`
                     : `<span style="color:#ffb74d">⚠ system install (${tools.legendary})</span>`)
                 : '<span style="color:#ef5350">not found</span>'
+        }`,
+        `<strong style="color:var(--text_main)">gogdl</strong>: ${
+            tools.gogdl
+                ? (tools.gogdl_bundled
+                    ? `<span style="color:#66bb6a">✓ bundled (${tools.gogdl})</span>`
+                    : `<span style="color:#ffb74d">⚠ system install (${tools.gogdl})</span>`)
+                : '<span style="color:var(--text_dim)">not found — required for GOG installation. Place gogdl binary next to GRINDER.AppImage.</span>'
         }`,
         `<strong style="color:var(--text_main)">umu-run</strong>: ${
             tools.umu
@@ -98,6 +106,7 @@ function renderGames(games) {
                 <div class="game-actions">
                     ${g.installed  ? `<button class="btn-launch" data-launch="${g.id}">▶ Launch</button>` : ''}
                     ${!g.installed && g.store === 'epic' ? `<button class="btn-install-game" data-install="${g.id}" style="background:#0078f2;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
+                    ${!g.installed && g.store === 'gog'  ? `<button class="btn-install-game" data-install="${g.id}" style="background:#9b59d9;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
                     <button class="btn-edit" data-edit="${g.id}">Edit</button>
                     ${g.installed ? `<button class="btn-uninstall" data-uninstall="${g.id}">Uninstall</button>` : ''}
                     <button class="btn-delete" data-delete="${g.id}">✕</button>
@@ -340,6 +349,15 @@ window.api.onInstallProgress(data => {
     if (eta)   document.getElementById('install-eta-label').textContent   = 'ETA ' + eta;
 });
 
+// GOG install progress feeds the same install log/bar
+window.api.onGogInstallProgress(data => {
+    const log = document.getElementById('install-log');
+    if (!log) return;
+    log.textContent += data;
+    log.scrollTop = log.scrollHeight;
+    setStatus(`Installing ${installingGame?.title || 'game'}...`);
+});
+
 document.getElementById('btn-install-start')?.addEventListener('click', async () => {
     if (!installingGame) return;
     const dir = document.getElementById('install-dir-input').value.trim();
@@ -352,22 +370,34 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     document.getElementById('btn-install-cancel-running').disabled  = false;
     setStatus(`Starting installation of ${installingGame.title}...`);
 
-    const result = await window.api.installGame(installingGame.app_id, dir);
+    let result;
+    if (installingGame.store === 'gog') {
+        result = await window.api.gogInstall(installingGame.app_id, installingGame.platform || 'windows', dir);
+    } else {
+        result = await window.api.installGame(installingGame.app_id, dir);
+    }
 
     document.getElementById('install-progress-panel').style.display = 'none';
 
     if (result.ok) {
-        // Update game in DB with real install path and executable
-        const info = result.info;
-        if (info) {
+        if (installingGame.store === 'gog') {
+            // GOG: install_dir is the base dir; game lands in a subfolder named by game ID
             await window.api.updateGame(installingGame.id, {
-                install_path: info.install_path || null,
-                executable:   info.executable   || null,
-                version:      info.version       || null,
+                install_path: result.install_dir || dir,
                 installed:    1,
             });
         } else {
-            await window.api.updateGame(installingGame.id, { installed: 1 });
+            const info = result.info;
+            if (info) {
+                await window.api.updateGame(installingGame.id, {
+                    install_path: info.install_path || null,
+                    executable:   info.executable   || null,
+                    version:      info.version       || null,
+                    installed:    1,
+                });
+            } else {
+                await window.api.updateGame(installingGame.id, { installed: 1 });
+            }
         }
         document.getElementById('install-done-msg').textContent = `${installingGame.title} installed!`;
         document.getElementById('install-done-panel').style.display = 'flex';
@@ -439,11 +469,28 @@ const modalImport   = document.getElementById('modal-import');
 let importGames     = [];
 let importSelected  = new Set();
 
-function openImportModal() { modalImport.classList.add('active'); loadImportData(); }
+// ── Import modal tab switching ─────────────────────────────────────────────────
+function switchImportTab(tab) {
+    document.getElementById('tab-panel-epic').style.display = tab === 'epic' ? 'flex' : 'none';
+    document.getElementById('tab-panel-gog').style.display  = tab === 'gog'  ? 'flex' : 'none';
+    document.getElementById('tab-epic').classList.toggle('active', tab === 'epic');
+    document.getElementById('tab-gog').classList.toggle('active',  tab === 'gog');
+}
+document.getElementById('tab-epic')?.addEventListener('click', () => switchImportTab('epic'));
+document.getElementById('tab-gog')?.addEventListener('click',  () => { switchImportTab('gog'); loadGogImportData(); });
+
+function openImportModal(tab = 'epic') {
+    modalImport.classList.add('active');
+    switchImportTab(tab);
+    if (tab === 'epic') loadImportData();
+    else                loadGogImportData();
+}
 function closeImportModal() { modalImport.classList.remove('active'); }
 
-document.getElementById('btn-import-legendary')?.addEventListener('click', openImportModal);
+document.getElementById('btn-import-legendary')?.addEventListener('click', () => openImportModal('epic'));
+document.getElementById('btn-import-gog')?.addEventListener('click',       () => openImportModal('gog'));
 document.getElementById('btn-import-cancel')?.addEventListener('click', closeImportModal);
+document.getElementById('btn-gog-import-cancel')?.addEventListener('click', closeImportModal);
 modalImport?.addEventListener('click', e => { if (e.target === modalImport) closeImportModal(); });
 
 document.getElementById('btn-epic-login')?.addEventListener('click', async () => {
@@ -534,6 +581,140 @@ document.getElementById('btn-import-confirm')?.addEventListener('click', async (
     const result = await window.api.legendaryImport(toImport);
     if (result.ok) {
         setStatus(`Imported ${result.count} game${result.count !== 1 ? 's' : ''} from Epic.`);
+        closeImportModal();
+        await loadGames();
+    } else {
+        setStatus(`Import failed: ${result.error}`);
+    }
+});
+
+// ── GOG import ────────────────────────────────────────────────────────────────
+let gogImportGames    = [];
+let gogImportSelected = new Set();
+
+async function refreshGogStatus() {
+    const s = await window.api.gogStatus();
+    const el         = document.getElementById('s-gog-status');
+    const loginBtn   = document.getElementById('btn-s-gog-login');
+    const logoutBtn  = document.getElementById('btn-s-gog-logout');
+    const gogdlEl    = document.getElementById('s-gogdl-status');
+    if (el) {
+        el.innerHTML = s.logged_in
+            ? `<span style="color:#66bb6a">✓ Logged in as <strong>${s.username}</strong></span>`
+            : `<span style="color:var(--text_dim)">Not logged in to GOG.</span>`;
+    }
+    if (loginBtn)  loginBtn.style.display  = s.logged_in ? 'none' : '';
+    if (logoutBtn) logoutBtn.style.display = s.logged_in ? ''     : 'none';
+    if (gogdlEl)   gogdlEl.innerHTML = s.gogdl
+        ? `<span style="color:#66bb6a">✓ gogdl found</span>`
+        : `<span style="color:var(--text_dim)">gogdl not found — place it next to GRINDER.AppImage</span>`;
+}
+
+document.getElementById('btn-s-gog-login')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-s-gog-login');
+    btn.disabled = true; btn.textContent = '⏳ Opening login window...';
+    window.api.onGogLoginProgress(() => {});
+    const result = await window.api.gogLogin();
+    btn.disabled = false; btn.textContent = 'Login to GOG';
+    await refreshGogStatus();
+    if (!result.ok) setStatus(`GOG login failed: ${result.error}`);
+});
+
+document.getElementById('btn-s-gog-logout')?.addEventListener('click', async () => {
+    await window.api.gogLogout();
+    await refreshGogStatus();
+    setStatus('Logged out of GOG.');
+});
+
+async function loadGogImportData() {
+    const loginPanel = document.getElementById('gog-login-panel');
+    const gamesPanel = document.getElementById('gog-games-panel');
+    const emptyPanel = document.getElementById('gog-empty');
+    const confirmBtn = document.getElementById('btn-gog-import-confirm');
+    const accountEl  = document.getElementById('gog-account');
+
+    const s = await window.api.gogStatus();
+    if (!s.logged_in) {
+        loginPanel.style.display = 'block';
+        gamesPanel.style.display = 'none';
+        emptyPanel.style.display = 'none';
+        confirmBtn.style.display = 'none';
+        return;
+    }
+
+    loginPanel.style.display = 'none';
+    accountEl.textContent = `✓ ${s.username}`;
+    setStatus('Fetching GOG library...');
+    confirmBtn.style.display = 'none';
+
+    const result = await window.api.gogListOwned();
+    if (!result.ok || !result.games.length) {
+        gamesPanel.style.display = 'none';
+        emptyPanel.style.display = 'block';
+        setStatus(result.ok ? 'No GOG games found.' : `Error: ${result.error}`);
+        return;
+    }
+
+    gogImportGames    = result.games;
+    gogImportSelected = new Set(gogImportGames.map(g => g.id));
+    gamesPanel.style.display = 'flex';
+    emptyPanel.style.display = 'none';
+    confirmBtn.style.display = '';
+    renderGogImportList();
+    setStatus(`Found ${gogImportGames.length} GOG game${gogImportGames.length !== 1 ? 's' : ''}.`);
+}
+
+function renderGogImportList() {
+    const list    = document.getElementById('gog-game-list');
+    const countEl = document.getElementById('gog-sel-count');
+    countEl.textContent = `${gogImportSelected.size} / ${gogImportGames.length} selected`;
+    list.innerHTML = gogImportGames.map(g => {
+        const alreadyIn = allGames.some(ag => ag.app_id === g.id && ag.store === 'gog');
+        const checked   = gogImportSelected.has(g.id);
+        const platBadge = g.platform === 'linux'
+            ? `<span style="font-size:9px;color:#66bb6a;font-weight:900;padding:1px 6px;border:1px solid rgba(102,187,106,0.4);border-radius:3px;">LINUX</span>`
+            : `<span style="font-size:9px;color:#9b59d9;font-weight:900;padding:1px 6px;border:1px solid rgba(155,89,217,0.4);border-radius:3px;">WIN</span>`;
+        return `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(0,0,0,0.2);border-radius:5px;cursor:${alreadyIn?'default':'pointer'};border:1px solid var(--border_solid);">
+            <input type="checkbox" data-gogid="${g.id}" ${checked && !alreadyIn ? 'checked' : ''} ${alreadyIn ? 'disabled' : ''} style="accent-color:#9b59d9;width:14px;height:14px;flex-shrink:0;">
+            <span style="flex:1;font-size:12px;font-weight:700;color:${alreadyIn?'var(--text_dim)':'var(--text_main)'};">${g.title}</span>
+            ${platBadge}
+            ${alreadyIn ? '<span style="font-size:10px;color:#66bb6a;font-weight:700;">Already imported</span>' : ''}
+        </label>`;
+    }).join('');
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) gogImportSelected.add(cb.dataset.gogid);
+            else            gogImportSelected.delete(cb.dataset.gogid);
+            document.getElementById('gog-sel-count').textContent = `${gogImportSelected.size} / ${gogImportGames.length} selected`;
+        });
+    });
+}
+
+document.getElementById('btn-gog-select-all')?.addEventListener('click', () => {
+    gogImportSelected = new Set(gogImportGames.filter(g => !allGames.some(ag => ag.app_id === g.id && ag.store === 'gog')).map(g => g.id));
+    renderGogImportList();
+});
+document.getElementById('btn-gog-select-none')?.addEventListener('click', () => { gogImportSelected.clear(); renderGogImportList(); });
+
+document.getElementById('btn-gog-login')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-gog-login');
+    const out = document.getElementById('gog-login-output');
+    btn.disabled = true; btn.textContent = '⏳ Opening login window...';
+    out.style.display = 'block'; out.textContent = '';
+    window.api.onGogLoginProgress(d => { out.textContent += d; out.scrollTop = out.scrollHeight; });
+    const result = await window.api.gogLogin();
+    btn.disabled = false; btn.textContent = result.ok ? '✓ Logged in' : 'Login to GOG';
+    if (result.ok) { await refreshGogStatus(); loadGogImportData(); }
+    else out.textContent += `\n✗ ${result.error}\n`;
+});
+
+document.getElementById('btn-gog-import-confirm')?.addEventListener('click', async () => {
+    const toImport = gogImportGames.filter(g => gogImportSelected.has(g.id));
+    if (!toImport.length) { setStatus('Nothing selected.'); return; }
+    const result = await window.api.gogImport(toImport);
+    if (result.ok) {
+        setStatus(`Imported ${result.count} game${result.count !== 1 ? 's' : ''} from GOG.`);
         closeImportModal();
         await loadGames();
     } else {
@@ -648,7 +829,7 @@ async function loadSettings() {
     document.getElementById('s-proton').value     = proton     || '';
     document.getElementById('s-prefix-dir').value = prefixDir  || '';
     renderProtonList(protonVersions);
-    await Promise.all([checkTools(), refreshLegendaryStatus()]);
+    await Promise.all([checkTools(), refreshLegendaryStatus(), refreshGogStatus()]);
 }
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
@@ -690,3 +871,4 @@ document.addEventListener('keydown', e => {
 loadProtonVersions();
 loadGames();
 refreshLegendaryStatus();
+refreshGogStatus();

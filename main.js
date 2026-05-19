@@ -52,6 +52,8 @@ function initDb() {
             value TEXT
         );
     `);
+    // Migrations
+    try { db.prepare("ALTER TABLE games ADD COLUMN platform TEXT").run(); } catch(e) {}
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -134,6 +136,7 @@ const binDir = app.isPackaged
     : path.join(__dirname, 'assets', 'bin', 'linux');
 
 const BUNDLED_LEGENDARY = path.join(binDir, 'legendary');
+const BUNDLED_GOGDL     = path.join(binDir, 'gogdl');
 
 // ── External tool helpers ─────────────────────────────────────────────────────
 function which(bin) {
@@ -145,6 +148,10 @@ function which(bin) {
 function findLegendary() {
     if (fs.existsSync(BUNDLED_LEGENDARY)) return BUNDLED_LEGENDARY;
     return which('legendary');
+}
+function findGogdl() {
+    if (fs.existsSync(BUNDLED_GOGDL)) return BUNDLED_GOGDL;
+    return which('gogdl');
 }
 // umu-run cannot be bundled (Python module); detect system install only
 function findUmu() { return which('umu-run'); }
@@ -191,6 +198,13 @@ async function launchGame(gameId) {
     // Non-Epic: validate exe
     if (!exe || !fs.existsSync(exe)) {
         throw new Error(`Executable not found: ${exe || '(not set)'}`);
+    }
+
+    // Linux native games (GOG linux builds, custom native apps): run directly
+    if (game.platform === 'linux') {
+        try { fs.chmodSync(exe, '755'); } catch {}
+        spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'native' };
     }
 
     // Launch priority:
@@ -348,12 +362,15 @@ ipcMain.handle('set-setting', (_, key, value) => { db.prepare("INSERT OR REPLACE
 
 // Environment checks
 ipcMain.handle('check-tools', () => {
-    const leg = findLegendary();
+    const leg   = findLegendary();
+    const gogdl = findGogdl();
     return {
-        legendary:        leg,
+        legendary:         leg,
         legendary_bundled: leg === BUNDLED_LEGENDARY,
-        umu:              findUmu(),
-        wine:             which('wine'),
+        gogdl:             gogdl,
+        gogdl_bundled:     gogdl === BUNDLED_GOGDL,
+        umu:               findUmu(),
+        wine:              which('wine'),
     };
 });
 
@@ -596,6 +613,206 @@ ipcMain.handle('legendary-import', (_, games) => {
     });
     try { return { ok: true, count: tx(games) }; }
     catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ── GOG / gogdl ───────────────────────────────────────────────────────────────
+
+const GOG_CLIENT_ID     = '46899977096215655';
+const GOG_CLIENT_SECRET = '9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9';
+const GOG_REDIRECT_URI  = 'https://embed.gog.com/on_login_success?origin=client';
+const GOG_AUTH_URL      =
+    `https://auth.gog.com/auth?client_id=${GOG_CLIENT_ID}` +
+    `&layout=client2&redirect_uri=${encodeURIComponent(GOG_REDIRECT_URI)}&response_type=code`;
+
+async function gogFetch(url, token) {
+    const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'GRINDER/1.0' },
+    });
+    if (!res.ok) throw new Error(`GOG API ${res.status}: ${url}`);
+    return res.json();
+}
+
+async function getGogToken() {
+    const get = k => db.prepare("SELECT value FROM settings WHERE key=?").get(k)?.value;
+    const access  = get('gog_access_token');
+    const refresh = get('gog_refresh_token');
+    const expiry  = parseInt(get('gog_token_expiry') || '0');
+
+    if (!refresh) return null;
+    if (access && Date.now() < expiry - 60000) return access;
+
+    try {
+        const res = await fetch('https://auth.gog.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id:     GOG_CLIENT_ID,
+                client_secret: GOG_CLIENT_SECRET,
+                grant_type:    'refresh_token',
+                refresh_token: refresh,
+            }).toString(),
+        });
+        const data = await res.json();
+        if (!data.access_token) return null;
+        const set = (k, v) => db.prepare("INSERT OR REPLACE INTO settings VALUES (?,?)").run(k, v);
+        set('gog_access_token', data.access_token);
+        set('gog_token_expiry', String(Date.now() + data.expires_in * 1000));
+        if (data.refresh_token) set('gog_refresh_token', data.refresh_token);
+        return data.access_token;
+    } catch { return null; }
+}
+
+function writeGogAuthConfig() {
+    const get = k => db.prepare("SELECT value FROM settings WHERE key=?").get(k)?.value || '';
+    const authPath = path.join(configDir, 'gogdl_auth.json');
+    fs.writeFileSync(authPath, JSON.stringify({
+        access_token:  get('gog_access_token'),
+        refresh_token: get('gog_refresh_token'),
+        user_id:       get('gog_user_id'),
+    }));
+    return authPath;
+}
+
+ipcMain.handle('gog-status', async () => {
+    const token = await getGogToken();
+    if (!token) return { logged_in: false, gogdl: !!findGogdl() };
+    try {
+        const user = await gogFetch('https://embed.gog.com/userData.json', token);
+        return { logged_in: true, username: user.username, userId: user.userId, gogdl: !!findGogdl() };
+    } catch { return { logged_in: false, gogdl: !!findGogdl() }; }
+});
+
+ipcMain.handle('gog-login', event => {
+    const send = d => { try { event.sender.send('gog-login-progress', String(d)); } catch {} };
+    return new Promise(resolve => {
+        let resolved = false;
+        const authWin = new BrowserWindow({
+            width: 600, height: 780, title: 'Login to GOG — close when done',
+            webPreferences: { nodeIntegration: false, contextIsolation: true },
+        });
+        authWin.setMenu(null);
+        authWin.loadURL(GOG_AUTH_URL);
+
+        async function tryExtract() {
+            if (resolved) return;
+            const url   = authWin.webContents.getURL();
+            const match = url.match(/[?&]code=([^&\s]+)/);
+            if (!match) return;
+            resolved = true;
+            authWin.close();
+            send('Exchanging auth code...\n');
+            try {
+                const res = await fetch('https://auth.gog.com/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        client_id:     GOG_CLIENT_ID,
+                        client_secret: GOG_CLIENT_SECRET,
+                        grant_type:    'authorization_code',
+                        code:          match[1],
+                        redirect_uri:  GOG_REDIRECT_URI,
+                    }).toString(),
+                });
+                const data = await res.json();
+                if (!data.access_token) { resolve({ ok: false, error: `No token: ${JSON.stringify(data)}` }); return; }
+                const set = (k, v) => db.prepare("INSERT OR REPLACE INTO settings VALUES (?,?)").run(k, v);
+                set('gog_access_token',  data.access_token);
+                set('gog_refresh_token', data.refresh_token);
+                set('gog_token_expiry',  String(Date.now() + data.expires_in * 1000));
+                const user = await gogFetch('https://embed.gog.com/userData.json', data.access_token);
+                if (user.userId) set('gog_user_id', String(user.userId));
+                send(`✓ Logged in as ${user.username}\n`);
+                resolve({ ok: true, username: user.username });
+            } catch (e) { resolve({ ok: false, error: e.message }); }
+        }
+
+        authWin.webContents.on('did-navigate',         tryExtract);
+        authWin.webContents.on('did-navigate-in-page', tryExtract);
+        authWin.on('closed', () => { if (!resolved) resolve({ ok: false, error: 'Window closed before login.' }); });
+    });
+});
+
+ipcMain.handle('gog-logout', () => {
+    for (const k of ['gog_access_token', 'gog_refresh_token', 'gog_token_expiry', 'gog_user_id'])
+        db.prepare("DELETE FROM settings WHERE key=?").run(k);
+    return true;
+});
+
+ipcMain.handle('gog-list-owned', async () => {
+    const token = await getGogToken();
+    if (!token) return { ok: false, error: 'Not logged in to GOG.' };
+    try {
+        const owned = await gogFetch('https://embed.gog.com/user/data/games', token);
+        const ids   = owned.owned || [];
+        if (!ids.length) return { ok: true, games: [] };
+
+        const games = [];
+        for (let i = 0; i < ids.length; i += 50) {
+            const batch = ids.slice(i, i + 50).join(',');
+            const data  = await gogFetch(`https://api.gog.com/products?ids=${batch}&expand=downloads`, token);
+            const items = Array.isArray(data) ? data : [data];
+            for (const item of items) {
+                if (!item?.id) continue;
+                const oses     = (item.downloads?.installers || []).map(x => x.os).filter(Boolean);
+                const platform = oses.includes('linux') ? 'linux' : 'windows';
+                games.push({ id: String(item.id), title: item.title || 'Unknown', platform });
+            }
+        }
+        return { ok: true, games };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('gog-import', (_, games) => {
+    const stmt = db.prepare(
+        "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, installed) VALUES (?, ?, 'gog', ?, ?, 0)"
+    );
+    const tx = db.transaction(list => {
+        let n = 0;
+        for (const g of list) { stmt.run('gog_' + g.id, g.title, g.id, g.platform || 'windows'); n++; }
+        return n;
+    });
+    try { return { ok: true, count: tx(games) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+});
+
+let activeGogInstallProc = null;
+
+ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
+    if (activeGogInstallProc) return { ok: false, error: 'An installation is already in progress.' };
+    const gogdl = findGogdl();
+    if (!gogdl) return { ok: false, error: 'gogdl not found. Place the gogdl binary in the same folder as GRINDER.AppImage.' };
+
+    const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+
+    const authPath = writeGogAuthConfig();
+    const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
+
+    return new Promise(resolve => {
+        activeGogInstallProc = spawn(gogdl, [
+            'download', appId,
+            '--platform',         platform,
+            '--path',             dir,
+            '--lang',             'en-US',
+            '--auth-config-path', authPath,
+        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        activeGogInstallProc.stdout.on('data', send);
+        activeGogInstallProc.stderr.on('data', send);
+        activeGogInstallProc.on('close', code => {
+            activeGogInstallProc = null;
+            try { fs.unlinkSync(authPath); } catch {}
+            resolve({ ok: code === 0, exitCode: code, install_dir: dir });
+        });
+        activeGogInstallProc.on('error', e => { activeGogInstallProc = null; resolve({ ok: false, error: e.message }); });
+    });
+});
+
+ipcMain.handle('gogdl-cancel-install', () => {
+    if (!activeGogInstallProc) return { ok: false };
+    activeGogInstallProc.kill('SIGTERM');
+    activeGogInstallProc = null;
+    return { ok: true };
 });
 
 // umu-run installer — tries pipx first, falls back to pip --user

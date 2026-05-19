@@ -33,6 +33,17 @@ contextBridge.exposeInMainWorld('api', {
     installUmu:   () => ipcRenderer.invoke('install-umu'),
     onUmuInstallProgress: (cb) => ipcRenderer.on('umu-install-progress', (_, data) => cb(data)),
 
+    // GOG
+    gogStatus:          ()                    => ipcRenderer.invoke('gog-status'),
+    gogLogin:           ()                    => ipcRenderer.invoke('gog-login'),
+    gogLogout:          ()                    => ipcRenderer.invoke('gog-logout'),
+    gogListOwned:       ()                    => ipcRenderer.invoke('gog-list-owned'),
+    gogImport:          (games)               => ipcRenderer.invoke('gog-import', games),
+    gogInstall:         (id, platform, dir)   => ipcRenderer.invoke('gogdl-install', id, platform, dir),
+    gogCancelInstall:   ()                    => ipcRenderer.invoke('gogdl-cancel-install'),
+    onGogLoginProgress:   (cb) => ipcRenderer.on('gog-login-progress',   (_, d) => cb(d)),
+    onGogInstallProgress: (cb) => ipcRenderer.on('gog-install-progress', (_, d) => cb(d)),
+
     // Legendary / Epic
     legendaryStatus:       () => ipcRenderer.invoke('legendary-status'),
     legendaryLogin:        () => ipcRenderer.invoke('legendary-login'),

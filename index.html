@@ -100,6 +100,12 @@
     .badge-gog    { background: rgba(139,43,226,0.15); color: #9b59d9; border: 1px solid rgba(139,43,226,0.3); }
     .badge-custom { background: rgba(139,90,43,0.15); color: var(--text_dim); border: 1px solid var(--border_solid); }
 
+    .store-tab { flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
+                 color: var(--text_dim); font-family: 'Raleway', sans-serif; font-weight: 900; font-size: 11px;
+                 letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: 0.15s; }
+    .store-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .store-tab:hover:not(.active) { color: var(--text_sec); }
+
     .game-title { flex: 1; font-size: 13px; font-weight: 700; color: var(--text_main); }
     .game-status { font-size: 10px; font-weight: 700; flex-shrink: 0; }
     .status-installed   { color: #66bb6a; }
@@ -229,38 +235,68 @@
     </div>
   </div>
 
-  <!-- Import from Legendary Modal -->
+  <!-- Import Modal (Epic + GOG tabs) -->
   <div id="modal-import" class="modal-overlay">
-    <div class="modal-box" style="width:620px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column;">
-      <h3 id="import-title">Import from Legendary</h3>
+    <div class="modal-box" style="width:640px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; gap:0;">
+      <h3 style="margin:0 0 12px;">Import Games</h3>
 
-      <!-- Login panel (shown when not logged in) -->
-      <div id="import-login-panel">
-        <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
-          GRINDER uses <strong>legendary</strong> to manage your Epic Games library.<br>
-          Log in once and your library syncs automatically.
-        </p>
-        <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
-        <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
+      <!-- Store tabs -->
+      <div style="display:flex; border-bottom:1px solid var(--border_solid); margin-bottom:14px; margin-left:-30px; margin-right:-30px; padding:0 30px;">
+        <button id="tab-epic" class="store-tab active">Epic Games</button>
+        <button id="tab-gog"  class="store-tab">GOG</button>
       </div>
 
-      <!-- Game list panel (shown when logged in) -->
-      <div id="import-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span id="import-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
-          <button id="btn-import-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
-          <button id="btn-import-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
-          <span id="import-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+      <!-- ── EPIC TAB ── -->
+      <div id="tab-panel-epic" style="display:flex; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
+        <div id="import-login-panel">
+          <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
+            GRINDER uses <strong>legendary</strong> to manage your Epic Games library.<br>
+            Log in once and your library syncs automatically.
+          </p>
+          <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
+          <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
         </div>
-        <div id="import-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:340px;"></div>
+        <div id="import-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span id="import-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
+            <button id="btn-import-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
+            <button id="btn-import-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
+            <span id="import-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+          </div>
+          <div id="import-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:300px;"></div>
+        </div>
+        <div id="import-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No Epic games found in your library.</div>
+        <div class="modal-actions" style="margin-top:auto;">
+          <button class="btn-cancel" id="btn-import-cancel">Close</button>
+          <button class="btn-confirm" id="btn-import-confirm" style="display:none;">Import Selected</button>
+        </div>
       </div>
 
-      <div id="import-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No Epic games found in your library.</div>
-
-      <div class="modal-actions" style="margin-top:12px;">
-        <button class="btn-cancel" id="btn-import-cancel">Close</button>
-        <button class="btn-confirm" id="btn-import-confirm" style="display:none;">Import Selected</button>
+      <!-- ── GOG TAB ── -->
+      <div id="tab-panel-gog" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
+        <div id="gog-login-panel">
+          <p style="font-size:13px; color:var(--text_sec); margin:0 0 16px; line-height:1.65;">
+            Log in with your GOG account. GRINDER fetches your library directly from the GOG API.
+          </p>
+          <button id="btn-gog-login" style="background:#9b59d9; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to GOG</button>
+          <div id="gog-login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:11px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
+        </div>
+        <div id="gog-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span id="gog-account" style="font-size:11px; color:#66bb6a; font-weight:700;"></span>
+            <button id="btn-gog-select-all" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
+            <button id="btn-gog-select-none" style="font-size:10px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
+            <span id="gog-sel-count" style="font-size:11px; color:var(--text_dim); margin-left:auto;"></span>
+          </div>
+          <div id="gog-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:300px;"></div>
+        </div>
+        <div id="gog-empty" style="display:none; color:var(--text_dim); font-size:13px; text-align:center; padding:20px 0;">No GOG games found in your library.</div>
+        <div class="modal-actions" style="margin-top:auto;">
+          <button class="btn-cancel" id="btn-gog-import-cancel">Close</button>
+          <button class="btn-confirm" id="btn-gog-import-confirm" style="display:none; background:#9b59d9; border-color:#9b59d9;">Import Selected</button>
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -318,6 +354,7 @@
 
       <div id="sidebar-footer">
         <div class="tool-status" id="status-legendary"><div class="dot"></div>legendary</div>
+        <div class="tool-status" id="status-gogdl"><div class="dot"></div>gogdl</div>
         <div class="tool-status" id="status-umu"><div class="dot"></div>umu-run</div>
         <div class="tool-status" id="status-wine"><div class="dot"></div>wine</div>
       </div>
@@ -330,7 +367,8 @@
         <div id="games-toolbar">
           <input id="search-input" placeholder="Search games..." autocomplete="off">
           <button id="btn-add-game">+ Add Game</button>
-          <button id="btn-import-legendary" style="background:transparent; border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import installed Epic games from Legendary">&#x2B07; Epic Import</button>
+          <button id="btn-import-legendary" style="background:transparent; border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import Epic Games library">&#x2B07; Epic</button>
+          <button id="btn-import-gog" style="background:transparent; border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; cursor:pointer; transition:0.2s;" title="Import GOG library">&#x2B07; GOG</button>
         </div>
         <div id="games-list"></div>
       </div>
@@ -355,6 +393,20 @@
           <div id="s-legendary-status" style="font-size:12px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
           <button id="btn-s-epic-login" style="display:none; background:#0078f2; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Login to Epic Games</button>
           <button id="btn-s-epic-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Logout</button>
+        </div>
+
+        <div class="settings-section">
+          <h3>&#x1F7E3; GOG</h3>
+          <div id="s-gog-status" style="font-size:12px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="btn-s-gog-login" style="display:none; background:#9b59d9; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Login to GOG</button>
+            <button id="btn-s-gog-logout" style="display:none; background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:1px;">Logout</button>
+          </div>
+          <p style="font-size:11px; color:var(--text_dim); margin-top:10px; line-height:1.6;">
+            <strong style="color:var(--text_sec)">gogdl</strong> is required to install GOG games.
+            Place the <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">gogdl</code> binary in the same folder as <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">GRINDER.AppImage</code>.
+          </p>
+          <div id="s-gogdl-status" style="font-size:11px; margin-top:4px;"></div>
         </div>
 
         <div class="settings-section">
