@@ -171,6 +171,59 @@
 </head>
 <body>
 
+  <!-- Install Game Modal -->
+  <div id="modal-install" class="modal-overlay">
+    <div class="modal-box" style="width:580px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; gap:0; padding:0;">
+
+      <!-- Header -->
+      <div style="padding:20px 24px 16px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
+        <h3 id="install-modal-title" style="margin:0; font-size:13px; font-weight:900; color:var(--accent); letter-spacing:2px; text-transform:uppercase;">Install Game</h3>
+        <p id="install-modal-subtitle" style="margin:6px 0 0; font-size:12px; color:var(--text_sec);"></p>
+      </div>
+
+      <!-- Config panel (pre-install) -->
+      <div id="install-config-panel" style="padding:20px 24px; display:flex; flex-direction:column; gap:14px;">
+        <div class="modal-row">
+          <label>Install Directory</label>
+          <div style="display:flex; gap:8px;">
+            <input id="install-dir-input" placeholder="~/Games" style="flex:1;">
+            <button id="btn-browse-install-dir" style="flex-shrink:0; padding:8px 14px; background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); border-radius:5px; cursor:pointer; font-family:Raleway,sans-serif; font-size:11px; font-weight:700;">Browse</button>
+          </div>
+          <p style="font-size:11px; color:var(--text_dim); margin:4px 0 0; line-height:1.5;">The game will be installed inside a subfolder here. Make sure you have enough disk space.</p>
+        </div>
+        <div class="modal-actions" style="margin:0;">
+          <button class="btn-cancel" id="btn-install-cancel-pre">Cancel</button>
+          <button class="btn-confirm" id="btn-install-start">&#x2B07; Install</button>
+        </div>
+      </div>
+
+      <!-- Progress panel (during install) -->
+      <div id="install-progress-panel" style="padding:20px 24px; display:none; flex-direction:column; gap:12px; flex:1; overflow:hidden;">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span id="install-pct-label" style="font-size:12px; font-weight:900; color:var(--accent);">0%</span>
+            <span id="install-speed-label" style="font-size:11px; color:var(--text_dim);"></span>
+            <span id="install-eta-label" style="font-size:11px; color:var(--text_dim);"></span>
+          </div>
+          <div style="width:100%; background:rgba(0,0,0,0.4); border-radius:4px; height:8px; overflow:hidden; border:1px solid var(--border_solid);">
+            <div id="install-progress-bar" style="height:100%; width:0%; background:var(--accent); transition:width 0.5s ease; border-radius:4px;"></div>
+          </div>
+        </div>
+        <div id="install-log" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:10px; color:var(--text_sec); white-space:pre-wrap; overflow-y:auto; max-height:220px; line-height:1.6;"></div>
+        <button id="btn-install-cancel-running" style="background:transparent; border:1px solid #ef5350; color:#ef5350; padding:8px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; cursor:pointer;">&#x2715; Cancel Download</button>
+      </div>
+
+      <!-- Done panel -->
+      <div id="install-done-panel" style="padding:24px; display:none; flex-direction:column; align-items:center; gap:16px; text-align:center;">
+        <div style="font-size:36px;">&#x2705;</div>
+        <p id="install-done-msg" style="margin:0; font-size:14px; color:var(--text_main); font-weight:700;"></p>
+        <p style="margin:0; font-size:12px; color:var(--text_dim);">The game is ready to launch from GRINDER.</p>
+        <button class="btn-confirm" id="btn-install-done">Close</button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Import from Legendary Modal -->
   <div id="modal-import" class="modal-overlay">
     <div class="modal-box" style="width:620px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column;">

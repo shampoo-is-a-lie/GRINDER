@@ -36,4 +36,12 @@ contextBridge.exposeInMainWorld('api', {
     legendaryListInstalled:() => ipcRenderer.invoke('legendary-list-installed'),
     legendaryImport:       (games) => ipcRenderer.invoke('legendary-import', games),
     onLegendaryLoginProgress: (cb) => ipcRenderer.on('legendary-login-progress', (_, d) => cb(d)),
+
+    // Installation
+    selectDirectory:      ()             => ipcRenderer.invoke('select-directory'),
+    installGame:          (id, dir)      => ipcRenderer.invoke('legendary-install', id, dir),
+    cancelInstall:        ()             => ipcRenderer.invoke('legendary-cancel-install'),
+    getInstallInfo:       (id)           => ipcRenderer.invoke('legendary-install-info', id),
+    uninstallGame:        (id)           => ipcRenderer.invoke('legendary-uninstall', id),
+    onInstallProgress:    (cb)           => ipcRenderer.on('install-progress', (_, d) => cb(d)),
 });

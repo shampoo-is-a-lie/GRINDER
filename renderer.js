@@ -98,7 +98,8 @@ function renderGames(games) {
                 ${g.installed ? '● Installed' : '○ Not installed'}
             </span>
             <div class="game-actions">
-                ${g.installed ? `<button class="btn-launch" data-launch="${g.id}">▶ Launch</button>` : ''}
+                ${g.installed  ? `<button class="btn-launch" data-launch="${g.id}">▶ Launch</button>` : ''}
+                ${!g.installed && g.store === 'epic' ? `<button class="btn-install-game" data-install="${g.id}" style="background:#0078f2;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
                 <button class="btn-edit" data-edit="${g.id}">Edit</button>
                 <button class="btn-delete" data-delete="${g.id}">✕</button>
             </div>
@@ -123,6 +124,15 @@ function renderGames(games) {
             const result = await window.api.launchGame(id);
             btn.disabled = false;
             setStatus(result.ok ? `Launched via ${result.method}.` : `Error: ${result.error}`);
+        });
+    });
+
+    // Install buttons
+    list.querySelectorAll('[data-install]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const game = allGames.find(g => g.id === btn.dataset.install);
+            if (game) openInstallModal(game);
         });
     });
 
@@ -213,6 +223,115 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     }
     closeModal();
     await loadGames();
+});
+
+// ── Installation ──────────────────────────────────────────────────────────────
+const modalInstall = document.getElementById('modal-install');
+let installingGame = null;
+
+function openInstallModal(game) {
+    installingGame = game;
+    document.getElementById('install-modal-title').textContent  = 'Install Game';
+    document.getElementById('install-modal-subtitle').textContent = game.title;
+    document.getElementById('install-config-panel').style.display   = 'flex';
+    document.getElementById('install-progress-panel').style.display = 'none';
+    document.getElementById('install-done-panel').style.display     = 'none';
+    document.getElementById('install-log').textContent = '';
+    document.getElementById('install-progress-bar').style.width = '0%';
+    document.getElementById('install-pct-label').textContent = '0%';
+    document.getElementById('install-speed-label').textContent = '';
+    document.getElementById('install-eta-label').textContent = '';
+
+    // Pre-fill install dir from settings
+    window.api.getSetting('default_install_dir').then(d => {
+        document.getElementById('install-dir-input').value = d || (window.homeDir || '~/Games');
+    });
+
+    modalInstall.classList.add('active');
+}
+
+function closeInstallModal() { modalInstall.classList.remove('active'); installingGame = null; }
+
+document.getElementById('btn-install-cancel-pre')?.addEventListener('click', closeInstallModal);
+document.getElementById('btn-install-done')?.addEventListener('click', () => { closeInstallModal(); loadGames(); });
+
+document.getElementById('btn-browse-install-dir')?.addEventListener('click', async () => {
+    const dir = await window.api.selectDirectory();
+    if (dir) document.getElementById('install-dir-input').value = dir;
+});
+
+document.getElementById('btn-install-cancel-running')?.addEventListener('click', async () => {
+    await window.api.cancelInstall();
+    document.getElementById('install-log').textContent += '\n⚠ Installation cancelled.\n';
+    document.getElementById('btn-install-cancel-running').disabled = true;
+    setStatus('Installation cancelled.');
+});
+
+function parseProgress(line) {
+    const pct   = line.match(/Progress:\s*([\d.]+)%/)?.[1];
+    const speed = line.match(/([\d.]+\s*\w+\/s)/)?.[1];
+    const eta   = line.match(/ETA:\s*([\d:]+)/)?.[1];
+    return { pct: pct ? parseFloat(pct) : null, speed: speed || null, eta: eta || null };
+}
+
+window.api.onInstallProgress(data => {
+    const log = document.getElementById('install-log');
+    if (!log) return;
+    log.textContent += data;
+    log.scrollTop = log.scrollHeight;
+
+    // Parse and update progress indicators
+    const { pct, speed, eta } = parseProgress(data);
+    if (pct !== null) {
+        document.getElementById('install-progress-bar').style.width = pct + '%';
+        document.getElementById('install-pct-label').textContent = pct.toFixed(1) + '%';
+        setStatus(`Installing ${installingGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+    }
+    if (speed) document.getElementById('install-speed-label').textContent = speed;
+    if (eta)   document.getElementById('install-eta-label').textContent   = 'ETA ' + eta;
+});
+
+document.getElementById('btn-install-start')?.addEventListener('click', async () => {
+    if (!installingGame) return;
+    const dir = document.getElementById('install-dir-input').value.trim();
+    if (!dir) { setStatus('Choose an install directory first.'); return; }
+
+    await window.api.setSetting('default_install_dir', dir);
+
+    document.getElementById('install-config-panel').style.display   = 'none';
+    document.getElementById('install-progress-panel').style.display = 'flex';
+    document.getElementById('btn-install-cancel-running').disabled  = false;
+    setStatus(`Starting installation of ${installingGame.title}...`);
+
+    const result = await window.api.installGame(installingGame.app_id, dir);
+
+    document.getElementById('install-progress-panel').style.display = 'none';
+
+    if (result.ok) {
+        // Update game in DB with real install path and executable
+        const info = result.info;
+        if (info) {
+            await window.api.updateGame(installingGame.id, {
+                install_path: info.install_path || null,
+                executable:   info.executable   || null,
+                version:      info.version       || null,
+                installed:    1,
+            });
+        } else {
+            await window.api.updateGame(installingGame.id, { installed: 1 });
+        }
+        document.getElementById('install-done-msg').textContent = `${installingGame.title} installed!`;
+        document.getElementById('install-done-panel').style.display = 'flex';
+        setStatus(`${installingGame.title} installed successfully.`);
+    } else {
+        document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? 'error'}).\n`;
+        document.getElementById('install-progress-panel').style.display = 'flex';
+        document.getElementById('btn-install-cancel-running').textContent = 'Close';
+        document.getElementById('btn-install-cancel-running').style.borderColor = 'var(--border_solid)';
+        document.getElementById('btn-install-cancel-running').style.color = 'var(--text_sec)';
+        document.getElementById('btn-install-cancel-running').onclick = closeInstallModal;
+        setStatus(`Installation of ${installingGame.title} failed.`);
+    }
 });
 
 // ── Legendary / Epic ──────────────────────────────────────────────────────────

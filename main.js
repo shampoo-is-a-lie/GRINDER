@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
@@ -430,6 +430,82 @@ ipcMain.handle('legendary-list-installed', async () => {
         const all = JSON.parse(r.stdout);
         return { ok: true, games: all.filter(g => !g.is_dlc) };
     } catch { return { ok: false, error: 'Failed to parse legendary output.' }; }
+});
+
+// ── Game installation ─────────────────────────────────────────────────────────
+let activeInstallProc = null;
+
+// Directory picker dialog
+ipcMain.handle('select-directory', async () => {
+    const result = await dialog.showOpenDialog(win, {
+        title: 'Choose Install Directory',
+        properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+});
+
+// Start installing a game via legendary
+ipcMain.handle('legendary-install', (event, appName, installDir) => {
+    if (activeInstallProc) return { ok: false, error: 'An installation is already in progress.' };
+    const leg = findLegendary();
+    if (!leg) return { ok: false, error: 'legendary not found.' };
+
+    const dir = installDir || path.join(HOME, 'Games');
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+
+    const send = d => { try { event.sender.send('install-progress', String(d)); } catch {} };
+
+    return new Promise(resolve => {
+        // -y skips interactive prompts; --skip-sdl skips SDL check
+        activeInstallProc = spawn(leg, ['install', appName, '--base-path', dir, '-y'], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        activeInstallProc.stdout.on('data', send);
+        activeInstallProc.stderr.on('data', send);
+
+        activeInstallProc.on('close', async code => {
+            activeInstallProc = null;
+            if (code === 0) {
+                // Get actual install path and executable from legendary
+                const info = await getGameInstallInfo(appName);
+                resolve({ ok: true, info });
+            } else {
+                resolve({ ok: false, exitCode: code });
+            }
+        });
+        activeInstallProc.on('error', e => { activeInstallProc = null; resolve({ ok: false, error: e.message }); });
+    });
+});
+
+// Cancel an in-progress installation
+ipcMain.handle('legendary-cancel-install', () => {
+    if (!activeInstallProc) return { ok: false };
+    activeInstallProc.kill('SIGTERM');
+    activeInstallProc = null;
+    return { ok: true };
+});
+
+// Get install path/exe for a specific game from legendary
+async function getGameInstallInfo(appName) {
+    const r = await runLegendary(['list-installed', '--json']);
+    if (!r.ok) return null;
+    try {
+        const all = JSON.parse(r.stdout);
+        return all.find(g => g.app_name === appName) || null;
+    } catch { return null; }
+}
+ipcMain.handle('legendary-install-info', (_, appName) => getGameInstallInfo(appName));
+
+// Uninstall a game via legendary
+ipcMain.handle('legendary-uninstall', (event, appName) => {
+    const leg = findLegendary();
+    if (!leg) return { ok: false, error: 'legendary not found.' };
+    return new Promise(resolve => {
+        const proc = spawn(leg, ['uninstall', appName, '-y'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        proc.on('close', code => resolve({ ok: code === 0 }));
+        proc.on('error', e => resolve({ ok: false, error: e.message }));
+    });
 });
 
 // Import selected games into GRINDER DB
