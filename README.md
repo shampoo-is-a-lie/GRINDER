@@ -17,9 +17,9 @@
 
 ## About
 
-GRINDER is the install and launch engine of the **Cafe Neurotico ecosystem**, built specifically to handle Epic Games on Linux without requiring Heroic to be running. It uses a bundled [legendary](https://github.com/derrod/legendary) binary to authenticate with Epic, browse your full library, install games, and launch them through **umu-run + GE-Proton** for maximum compatibility.
+GRINDER is the install and launch engine of the **Cafe Neurotico ecosystem**. It uses a bundled [legendary](https://github.com/derrod/legendary) binary to authenticate with Epic, browse your full library, install games, and launch them through **umu-run + GE-Proton** for maximum compatibility.
 
-Place `GRINDER.AppImage` in the same folder as `CNGM.AppImage` and the two apps connect automatically — CNGM detects GRINDER, shows which Epic games are installed in it, and lets you toggle individual games to launch via GRINDER instead of Heroic on a per-game basis.
+Place `GRINDER.AppImage` in the same folder as `CNGM.AppImage` and the two apps connect automatically — CNGM detects GRINDER, shows which Epic games are installed in it, and lets you toggle individual games to launch via GRINDER on a per-game basis.
 
 GRINDER also works headlessly as a CLI backend:
 
@@ -39,7 +39,7 @@ GRINDER.AppImage launch <game_id>
 - **Disk Size Display** — Shows on-disk size for every installed game in the library list.
 - **Uninstall** — Removes game files, Wine prefix, and legendary's install record cleanly in one action.
 - **CLI Mode** — Run headlessly to launch a game from an external launcher: `GRINDER.AppImage launch <game_id>`.
-- **CNGM Integration** — Auto-detected by CNGM when placed in the same folder. Per-game toggle in CNGM's edit panel to switch between Heroic and GRINDER launch.
+- **CNGM Integration** — Auto-detected by CNGM when placed in the same folder. Per-game toggle in CNGM's edit panel to enable GRINDER as the launch backend.
 
 ## Installation
 
