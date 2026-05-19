@@ -310,6 +310,10 @@ function openModal(game = null) {
     document.getElementById('edit-prefix').value       = game?.prefix_path  || '';
     populateProtonDropdown(protonVersions, game?.proton_path || '');
     document.getElementById('edit-notes').value        = game?.notes        || '';
+    document.getElementById('edit-env').value          = game?.custom_env   || '';
+    document.getElementById('edit-winetricks').value   = game?.winetricks   || '';
+    const isGog = (game?.store === 'gog');
+    document.getElementById('edit-gog-compat').style.display = isGog ? 'flex' : 'none';
     modal.classList.add('active');
     document.getElementById('edit-title').focus();
 }
@@ -328,12 +332,14 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     const data = {
         title,
         store:        document.getElementById('edit-store').value,
-        app_id:       document.getElementById('edit-appid').value.trim()       || null,
+        app_id:       document.getElementById('edit-appid').value.trim()        || null,
         install_path: document.getElementById('edit-install-path').value.trim() || null,
-        executable:   document.getElementById('edit-exe').value.trim()          || null,
-        prefix_path:  document.getElementById('edit-prefix').value.trim()       || null,
-        proton_path:  document.getElementById('edit-proton').value               || null,
-        notes:        document.getElementById('edit-notes').value.trim()         || null,
+        executable:   document.getElementById('edit-exe').value.trim()           || null,
+        prefix_path:  document.getElementById('edit-prefix').value.trim()        || null,
+        proton_path:  document.getElementById('edit-proton').value                || null,
+        notes:        document.getElementById('edit-notes').value.trim()          || null,
+        custom_env:   document.getElementById('edit-env').value.trim()            || null,
+        winetricks:   document.getElementById('edit-winetricks').value.trim()     || null,
         installed:    document.getElementById('edit-install-path').value.trim() ? 1 : 0,
     };
 
@@ -346,6 +352,80 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     }
     closeModal();
     await loadGames();
+});
+
+// Also toggle GOG compat section when store changes inside the modal
+document.getElementById('edit-store').addEventListener('change', e => {
+    document.getElementById('edit-gog-compat').style.display = e.target.value === 'gog' ? 'flex' : 'none';
+});
+
+// ── Compat modal (winetricks / redist) ────────────────────────────────────────
+const modalCompat = document.getElementById('modal-compat');
+
+function openCompatModal(title) {
+    document.getElementById('modal-compat-title').textContent = title;
+    document.getElementById('modal-compat-output').textContent = '';
+    document.getElementById('btn-compat-close').style.display = 'none';
+    document.getElementById('modal-compat-spinner').style.display = 'inline';
+    modalCompat.classList.add('active');
+}
+
+function appendCompatLine(line) {
+    const out = document.getElementById('modal-compat-output');
+    out.textContent += line + '\n';
+    out.scrollTop = out.scrollHeight;
+}
+
+function finishCompatModal(ok, msg) {
+    document.getElementById('modal-compat-spinner').style.display = 'none';
+    document.getElementById('btn-compat-close').style.display = 'inline-block';
+    if (msg) appendCompatLine('\n' + (ok ? '✓ ' : '✗ ') + msg);
+}
+
+document.getElementById('btn-compat-close').addEventListener('click', () => {
+    modalCompat.classList.remove('active');
+});
+
+window.api.onWinetricksProgress(data => {
+    if (data.line)   appendCompatLine(data.line);
+    if (data.done)   finishCompatModal(data.ok, data.msg);
+});
+
+window.api.onRedistProgress(data => {
+    if (data.line)   appendCompatLine(data.line);
+    if (data.done)   finishCompatModal(data.ok, data.msg);
+});
+
+// Run Winetricks button
+document.getElementById('btn-run-winetricks').addEventListener('click', async () => {
+    const tricks = document.getElementById('edit-winetricks').value.trim();
+    if (!tricks) { showAlert('Winetricks', 'Enter at least one component (e.g. vcrun2019).'); return; }
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('Winetricks', 'Save the game first so a prefix can be resolved.'); return; }
+
+    const { found } = await window.api.checkWinetricks();
+    if (!found) { showAlert('Winetricks', 'winetricks not found. Install it via your package manager.'); return; }
+
+    const prefix = await window.api.getGamePrefix(gameId);
+    if (!prefix) { showAlert('Winetricks', 'Could not resolve Wine prefix for this game.'); return; }
+
+    openCompatModal('Winetricks — ' + (document.getElementById('edit-title').value || gameId));
+    window.api.runWinetricks(prefix, tricks);
+});
+
+// Install GOG Compat Files button
+document.getElementById('btn-install-redist').addEventListener('click', async () => {
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('GOG Compat', 'Save the game first.'); return; }
+    const game = allGames.find(g => g.id === gameId);
+    if (!game) return;
+    if (game.store !== 'gog') { showAlert('GOG Compat', 'This is only available for GOG games.'); return; }
+    if (!game.install_path) { showAlert('GOG Compat', 'Game has no install path — install it first.'); return; }
+    const appId  = game.app_id;
+    const plat   = game.platform || 'windows';
+    const prefix = await window.api.getGamePrefix(game.id);
+    openCompatModal('GOG Compat Files — ' + game.title);
+    window.api.gogInstallRedist(appId, plat, game.install_path, prefix, game.proton_path || null);
 });
 
 // ── Installation ──────────────────────────────────────────────────────────────
@@ -449,7 +529,11 @@ document.getElementById('btn-browse-install-dir')?.addEventListener('click', asy
 });
 
 document.getElementById('btn-install-cancel-running')?.addEventListener('click', async () => {
-    await window.api.cancelInstall();
+    if (installingGame?.store === 'gog') {
+        await window.api.gogCancelInstall();
+    } else {
+        await window.api.cancelInstall();
+    }
     document.getElementById('install-log').textContent += '\n⚠ Installation cancelled.\n';
     document.getElementById('btn-install-cancel-running').disabled = true;
     setStatus('Installation cancelled.');
@@ -991,6 +1075,8 @@ function showConfirm(title, bodyHtml) {
         const canBtn = document.getElementById('modal-confirm-cancel');
         document.getElementById('modal-confirm-title').textContent = title;
         document.getElementById('modal-confirm-body').innerHTML    = bodyHtml;
+        canBtn.style.display = '';
+        okBtn.textContent = 'Uninstall';
         modal.classList.add('active');
         const done = (result) => {
             modal.classList.remove('active');
@@ -1000,6 +1086,32 @@ function showConfirm(title, bodyHtml) {
         okBtn.onclick  = () => done(true);
         canBtn.onclick = () => done(false);
         modal.onclick  = (e) => { if (e.target === modal) done(false); };
+    });
+}
+
+function showAlert(title, msg) {
+    return new Promise(resolve => {
+        const modal  = document.getElementById('modal-confirm');
+        const okBtn  = document.getElementById('modal-confirm-ok');
+        const canBtn = document.getElementById('modal-confirm-cancel');
+        document.getElementById('modal-confirm-title').textContent = title;
+        document.getElementById('modal-confirm-body').innerHTML    = msg;
+        canBtn.style.display = 'none';
+        okBtn.textContent = 'OK';
+        okBtn.style.background = 'transparent';
+        okBtn.style.borderColor = 'var(--border_solid)';
+        okBtn.style.color = 'var(--text_sec)';
+        modal.classList.add('active');
+        const done = () => {
+            modal.classList.remove('active');
+            okBtn.onclick = modal.onclick = null;
+            okBtn.style.background = '';
+            okBtn.style.borderColor = '';
+            okBtn.style.color = '';
+            resolve();
+        };
+        okBtn.onclick  = () => done();
+        modal.onclick  = (e) => { if (e.target === modal) done(); };
     });
 }
 

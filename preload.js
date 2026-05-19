@@ -67,4 +67,12 @@ contextBridge.exposeInMainWorld('api', {
     getInstallInfo:       (id)           => ipcRenderer.invoke('legendary-install-info', id),
     uninstallGame:        (id)           => ipcRenderer.invoke('legendary-uninstall', id),
     onInstallProgress:    (cb)           => ipcRenderer.on('install-progress', (_, d) => cb(d)),
+
+    // Compat / Winetricks / Redist
+    getGamePrefix:        (id)                        => ipcRenderer.invoke('get-game-prefix', id),
+    checkWinetricks:      ()                          => ipcRenderer.invoke('check-winetricks'),
+    runWinetricks:        (prefix, tricks)            => ipcRenderer.invoke('run-winetricks', prefix, tricks),
+    gogInstallRedist:     (appId, plat, inst, prefix, proton) => ipcRenderer.invoke('gogdl-install-redist', appId, plat, inst, prefix, proton),
+    onWinetricksProgress: (cb) => ipcRenderer.on('winetricks-progress', (_, d) => cb(d)),
+    onRedistProgress:     (cb) => ipcRenderer.on('redist-progress',     (_, d) => cb(d)),
 });

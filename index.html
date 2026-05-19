@@ -196,7 +196,7 @@
     .setting-row input, .btn-save-settings { font-size: 15px; }
     .modal-box h3 { font-size: 16px; }
     .modal-row label { font-size: 13px; }
-    .modal-row input, .modal-row select { font-size: 15px; }
+    .modal-row input, .modal-row select, .modal-row textarea { font-size: 15px; }
     .modal-actions button { font-size: 14px; }
     #statusbar { font-size: 13px; }
     /* ── Filter bar ── */
@@ -357,7 +357,7 @@
 
   <!-- Add/Edit Game Modal -->
   <div id="modal-game" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box" style="max-height:88vh; overflow-y:auto;">
       <h3 id="modal-title">Add Game</h3>
       <input type="hidden" id="edit-id">
       <div class="modal-row"><label>Title</label><input id="edit-title" placeholder="Game title"></div>
@@ -380,9 +380,48 @@
         </select>
       </div>
       <div class="modal-row"><label>Notes</label><input id="edit-notes" placeholder="Optional notes"></div>
+
+      <!-- Environment Variables -->
+      <div class="modal-row">
+        <label>Environment Variables</label>
+        <textarea id="edit-env" placeholder="KEY=value&#10;ANOTHER_KEY=value" rows="3" style="background:var(--bg); border:1px solid var(--border_solid); color:var(--text_main); border-radius:5px; padding:8px 10px; font-family:monospace; font-size:13px; resize:vertical; line-height:1.5;"></textarea>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">One KEY=value per line. Applied at launch before Proton/Wine.</span>
+      </div>
+
+      <!-- Winetricks -->
+      <div class="modal-row">
+        <label>Winetricks Components</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="edit-winetricks" placeholder="vcrun2019 d3dcompiler_47 dotnet48" style="flex:1;">
+          <button id="btn-run-winetricks" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); padding:8px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:13px; letter-spacing:1px; cursor:pointer; white-space:nowrap; transition:0.2s;" title="Run winetricks with these components into this game's prefix">&#x2699; Run</button>
+        </div>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Space-separated. Saved to this game and run whenever you click Run.</span>
+      </div>
+
+      <!-- GOG Compat Files (GOG only) -->
+      <div id="edit-gog-compat" style="display:none; border-top:1px solid var(--border_solid); padding-top:14px; flex-direction:column; gap:8px;">
+        <span style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px;">GOG Compatibility</span>
+        <button id="btn-install-redist" style="background:rgba(155,89,217,0.12); border:1px solid #9b59d9; color:#c792ea; padding:9px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:13px; letter-spacing:1px; cursor:pointer; align-self:flex-start; transition:0.2s;" title="Download and install GOG compatibility files (VC++, DirectX, etc.) into this game's Wine prefix">&#x2B07; Install Compat. Files</button>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Downloads and runs GOG redistribs (VC++, DirectX, etc.) into this game's Wine prefix via gogdl.</span>
+      </div>
+
       <div class="modal-actions">
         <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
         <button class="btn-confirm" id="btn-modal-save">Save Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compat / Winetricks progress modal -->
+  <div id="modal-compat" class="modal-overlay">
+    <div class="modal-box" style="width:640px; max-height:75vh; overflow:hidden; display:flex; flex-direction:column; gap:0; padding:0;">
+      <div style="padding:20px 24px 16px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
+        <h3 id="modal-compat-title" style="margin:0; font-size:13px;">Running...</h3>
+      </div>
+      <div id="modal-compat-output" style="flex:1; overflow-y:auto; padding:16px 20px; font-family:monospace; font-size:13px; color:#a0c4a0; white-space:pre-wrap; line-height:1.55; background:rgba(0,0,0,0.35);"></div>
+      <div style="padding:14px 20px; border-top:1px solid var(--border_solid); display:flex; justify-content:flex-end; flex-shrink:0;">
+        <button id="btn-compat-close" class="btn-cancel" style="display:none;">Close</button>
+        <span id="modal-compat-spinner" style="font-size:13px; color:var(--text_dim); font-style:italic;">Running…</span>
       </div>
     </div>
   </div>
