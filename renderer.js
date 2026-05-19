@@ -155,7 +155,7 @@ function openModal(game = null) {
     document.getElementById('edit-install-path').value = game?.install_path || '';
     document.getElementById('edit-exe').value          = game?.executable   || '';
     document.getElementById('edit-prefix').value       = game?.prefix_path  || '';
-    document.getElementById('edit-proton').value       = game?.proton_path  || '';
+    populateProtonDropdown(protonVersions, game?.proton_path || '');
     document.getElementById('edit-notes').value        = game?.notes        || '';
     modal.classList.add('active');
     document.getElementById('edit-title').focus();
@@ -179,7 +179,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
         install_path: document.getElementById('edit-install-path').value.trim() || null,
         executable:   document.getElementById('edit-exe').value.trim()          || null,
         prefix_path:  document.getElementById('edit-prefix').value.trim()       || null,
-        proton_path:  document.getElementById('edit-proton').value.trim()       || null,
+        proton_path:  document.getElementById('edit-proton').value               || null,
         notes:        document.getElementById('edit-notes').value.trim()         || null,
         installed:    document.getElementById('edit-install-path').value.trim() ? 1 : 0,
     };
@@ -195,6 +195,70 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     await loadGames();
 });
 
+// ── Proton versions ───────────────────────────────────────────────────────────
+let protonVersions = []; // cache
+
+const TYPE_LABEL = { ge: '🟠 GE-Proton', steam: '🔵 Steam Proton', other: '⚪ Other' };
+
+function populateProtonDropdown(versions, selectedPath = '') {
+    const sel = document.getElementById('edit-proton');
+    const prev = sel.value || selectedPath;
+    sel.innerHTML = '<option value="">Use system default</option>';
+    for (const v of versions) {
+        const opt = document.createElement('option');
+        opt.value = v.path;
+        opt.textContent = `${TYPE_LABEL[v.type] ?? v.type} — ${v.name}`;
+        sel.appendChild(opt);
+    }
+    if (prev) sel.value = prev;
+}
+
+async function loadProtonVersions() {
+    // Load cached list from DB first
+    const cached = await window.api.getSetting('proton_versions_cache');
+    if (cached) {
+        try { protonVersions = JSON.parse(cached); }
+        catch { protonVersions = []; }
+    }
+    populateProtonDropdown(protonVersions);
+    renderProtonList(protonVersions);
+}
+
+function renderProtonList(versions) {
+    const container = document.getElementById('proton-list');
+    if (!versions.length) {
+        container.innerHTML = '<span style="color:var(--text_dim)">No Proton versions found yet. Click Scan.</span>';
+        return;
+    }
+    const defaultPath = document.getElementById('s-proton').value;
+    container.innerHTML = versions.map(v => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid var(--border_solid);">
+            <span style="font-size:10px;font-weight:900;color:var(--accent);min-width:80px;">${TYPE_LABEL[v.type] ?? v.type}</span>
+            <span style="flex:1;font-size:12px;color:var(--text_main);">${v.name}</span>
+            <span style="font-size:10px;color:var(--text_dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;" title="${v.path}">${v.path}</span>
+            <button onclick="setDefaultProton('${v.path.replace(/'/g, "\\'")}')" style="font-size:10px;font-weight:900;padding:3px 8px;border:1px solid var(--border_solid);background:transparent;color:var(--text_sec);border-radius:3px;cursor:pointer;font-family:Raleway,sans-serif;${v.path===defaultPath?'border-color:var(--accent);color:var(--accent);':''}">${v.path===defaultPath?'✓ Default':'Set Default'}</button>
+        </div>
+    `).join('');
+}
+
+window.setDefaultProton = async (p) => {
+    document.getElementById('s-proton').value = p;
+    await window.api.setSetting('default_proton_path', p);
+    renderProtonList(protonVersions);
+    setStatus(`Default Proton set: ${p.split('/').pop()}`);
+};
+
+document.getElementById('btn-scan-proton').addEventListener('click', async () => {
+    setStatus('Scanning for Proton versions...');
+    document.getElementById('btn-scan-proton').textContent = '⏳ Scanning...';
+    protonVersions = await window.api.scanProton();
+    await window.api.setSetting('proton_versions_cache', JSON.stringify(protonVersions));
+    populateProtonDropdown(protonVersions);
+    renderProtonList(protonVersions);
+    document.getElementById('btn-scan-proton').textContent = '🔍 Scan for Proton Versions';
+    setStatus(`Found ${protonVersions.length} Proton version${protonVersions.length !== 1 ? 's' : ''}.`);
+});
+
 // ── Settings view ─────────────────────────────────────────────────────────────
 async function loadSettings() {
     const [proton, prefixDir] = await Promise.all([
@@ -203,6 +267,7 @@ async function loadSettings() {
     ]);
     document.getElementById('s-proton').value     = proton     || '';
     document.getElementById('s-prefix-dir').value = prefixDir  || '';
+    renderProtonList(protonVersions);
     await checkTools();
 }
 
@@ -222,4 +287,5 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+loadProtonVersions();
 loadGames();

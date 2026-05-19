@@ -25,4 +25,5 @@ contextBridge.exposeInMainWorld('api', {
     checkTools:   () => ipcRenderer.invoke('check-tools'),
     openPath:     (p) => ipcRenderer.invoke('open-path', p),
     getConfigDir: () => ipcRenderer.invoke('get-config-dir'),
+    scanProton:   () => ipcRenderer.invoke('scan-proton'),
 });

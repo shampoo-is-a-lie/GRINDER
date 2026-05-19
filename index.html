@@ -189,7 +189,12 @@
       <div class="modal-row"><label>Install Path</label><input id="edit-install-path" placeholder="/path/to/game/directory"></div>
       <div class="modal-row"><label>Executable (relative to install path)</label><input id="edit-exe" placeholder="Game.exe"></div>
       <div class="modal-row"><label>Wine Prefix (leave blank for default)</label><input id="edit-prefix" placeholder="~/.local/share/grinder/prefixes/game-id"></div>
-      <div class="modal-row"><label>Proton Path (leave blank for default)</label><input id="edit-proton" placeholder="/path/to/Proton-GE"></div>
+      <div class="modal-row">
+        <label>Proton Version</label>
+        <select id="edit-proton">
+          <option value="">Use system default</option>
+        </select>
+      </div>
       <div class="modal-row"><label>Notes</label><input id="edit-notes" placeholder="Optional notes"></div>
       <div class="modal-actions">
         <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
@@ -250,6 +255,14 @@
             <input id="s-prefix-dir" placeholder="~/.local/share/grinder/prefixes">
             <p>Where per-game Wine prefixes are created by default. Each game gets its own subfolder named by game ID.</p>
           </div>
+        </div>
+        <div class="settings-section">
+          <h3>&#x1F9AA; Proton Versions</h3>
+          <div id="proton-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--text_sec);">Not scanned yet.</div>
+          <button class="btn-save-settings" id="btn-scan-proton" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec); margin-bottom:4px;">&#x1F50D; Scan for Proton Versions</button>
+          <p style="font-size:11px; color:var(--text_dim); margin-top:4px; line-height:1.6;">
+            Scans Steam, Flatpak Steam, and <code style="font-size:11px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">compatibilitytools.d</code> for installed Proton versions (including GE-Proton). Install new versions with <strong style="color:var(--text_sec)">ProtonUp-Qt</strong>.
+          </p>
         </div>
         <div class="settings-section">
           <h3>&#x1F9EA; External Tools</h3>

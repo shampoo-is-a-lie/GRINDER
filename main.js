@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs   = require('fs');
+const os   = require('os');
 const { spawn, execSync } = require('child_process');
 const Database = require('better-sqlite3');
 
@@ -51,6 +52,67 @@ function initDb() {
             value TEXT
         );
     `);
+}
+
+// ── Proton scanner ────────────────────────────────────────────────────────────
+const HOME = os.homedir();
+
+// All directories that may contain Proton installations
+const PROTON_DIRS = [
+    // Steam native (multiple common paths)
+    path.join(HOME, '.steam', 'root', 'steamapps', 'common'),
+    path.join(HOME, '.steam', 'steam', 'steamapps', 'common'),
+    path.join(HOME, '.local', 'share', 'Steam', 'steamapps', 'common'),
+    // GE-Proton and custom compatibility tools
+    path.join(HOME, '.steam', 'root', 'compatibilitytools.d'),
+    path.join(HOME, '.steam', 'steam', 'compatibilitytools.d'),
+    path.join(HOME, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+    // Flatpak Steam
+    path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', 'data', 'Steam', 'steamapps', 'common'),
+    path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', 'data', 'Steam', 'compatibilitytools.d'),
+];
+
+function scanProtonVersions() {
+    const found = [];
+    const seen  = new Set();
+
+    for (const dir of PROTON_DIRS) {
+        if (!fs.existsSync(dir)) continue;
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+        catch { continue; }
+
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const fullPath = path.join(dir, entry.name);
+            if (seen.has(fullPath)) continue;
+
+            // A valid Proton dir has a 'proton' script and/or toolmanifest.vdf
+            const isProton =
+                fs.existsSync(path.join(fullPath, 'proton')) ||
+                fs.existsSync(path.join(fullPath, 'toolmanifest.vdf')) ||
+                fs.existsSync(path.join(fullPath, 'compatibilitytool.vdf'));
+
+            if (!isProton) continue;
+            seen.add(fullPath);
+
+            const name = entry.name;
+            let type = 'other';
+            if (/^GE-Proton|^Proton-GE/i.test(name))  type = 'ge';
+            else if (/^Proton/i.test(name))             type = 'steam';
+
+            found.push({ name, path: fullPath, type });
+        }
+    }
+
+    // Sort: GE-Proton first (usually preferred), then Steam Proton, then others.
+    // Within each group, newest (highest version number) first.
+    const order = { ge: 0, steam: 1, other: 2 };
+    return found.sort((a, b) => {
+        const to = (order[a.type] ?? 2) - (order[b.type] ?? 2);
+        if (to !== 0) return to;
+        return b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
 }
 
 // ── External tool helpers ─────────────────────────────────────────────────────
@@ -201,3 +263,6 @@ ipcMain.handle('check-tools', () => ({
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
 ipcMain.handle('get-config-dir', () => configDir);
+
+// Proton
+ipcMain.handle('scan-proton', () => scanProtonVersions());
