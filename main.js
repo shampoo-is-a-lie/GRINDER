@@ -85,23 +85,26 @@ function scanProtonVersions() {
         for (const entry of entries) {
             if (!entry.isDirectory()) continue;
             const fullPath = path.join(dir, entry.name);
-            if (seen.has(fullPath)) continue;
+            // Resolve symlinks so ~/.steam/root, ~/.steam/steam, ~/.local/share/Steam
+            // (which are all symlinks to the same location) don't produce duplicates.
+            const realPath = (() => { try { return fs.realpathSync(fullPath); } catch { return fullPath; } })();
+            if (seen.has(realPath)) continue;
 
             // A valid Proton dir has a 'proton' script and/or toolmanifest.vdf
             const isProton =
-                fs.existsSync(path.join(fullPath, 'proton')) ||
-                fs.existsSync(path.join(fullPath, 'toolmanifest.vdf')) ||
-                fs.existsSync(path.join(fullPath, 'compatibilitytool.vdf'));
+                fs.existsSync(path.join(realPath, 'proton')) ||
+                fs.existsSync(path.join(realPath, 'toolmanifest.vdf')) ||
+                fs.existsSync(path.join(realPath, 'compatibilitytool.vdf'));
 
             if (!isProton) continue;
-            seen.add(fullPath);
+            seen.add(realPath);
 
             const name = entry.name;
             let type = 'other';
             if (/^GE-Proton|^Proton-GE/i.test(name))  type = 'ge';
             else if (/^Proton/i.test(name))             type = 'steam';
 
-            found.push({ name, path: fullPath, type });
+            found.push({ name, path: realPath, type });
         }
     }
 
@@ -317,6 +320,16 @@ ipcMain.handle('uninstall-game-files', async (_, id) => {
     if (fs.existsSync(prefixPath)) {
         try { fs.rmSync(prefixPath, { recursive: true, force: true }); }
         catch (e) { errors.push(`Prefix: ${e.message}`); }
+    }
+
+    // For Epic games, also tell legendary to remove its own install record
+    if (game.store === 'epic' && game.app_id) {
+        const leg = findLegendary();
+        if (leg) await new Promise(resolve => {
+            const proc = spawn(leg, ['uninstall', game.app_id, '-y'], { stdio: 'ignore' });
+            proc.on('close', resolve);
+            proc.on('error', resolve);
+        });
     }
 
     db.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(id);
