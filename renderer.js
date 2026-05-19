@@ -231,6 +231,19 @@ async function loadGameSizes() {
 
 document.getElementById('search-input').addEventListener('input', () => renderGames(filterGames()));
 
+document.getElementById('btn-verify-installs')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-verify-installs');
+    btn.textContent = '⏳ Verifying…';
+    btn.disabled = true;
+    const { reset } = await window.api.verifyInstalls();
+    await loadGames();
+    btn.textContent = '✓ Verify';
+    btn.disabled = false;
+    setStatus(reset > 0
+        ? `Reset ${reset} game${reset !== 1 ? 's' : ''} with missing files — ready to reinstall.`
+        : 'All installed games verified OK.');
+});
+
 // ── Modal: Add / Edit game ─────────────────────────────────────────────────────
 const modal = document.getElementById('modal-game');
 

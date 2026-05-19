@@ -386,6 +386,19 @@ ipcMain.handle('check-tools', () => {
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
 
+ipcMain.handle('verify-installs', () => {
+    const installed = db.prepare("SELECT id, install_path FROM games WHERE installed=1").all();
+    let reset = 0;
+    for (const g of installed) {
+        const p = expandTilde(g.install_path || '');
+        if (!p || !fs.existsSync(p)) {
+            db.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(g.id);
+            reset++;
+        }
+    }
+    return { reset };
+});
+
 ipcMain.handle('get-disk-size', (_, dirPath) => {
     const resolved = expandTilde(dirPath);
     if (!resolved || !fs.existsSync(resolved)) return null;

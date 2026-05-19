@@ -23,7 +23,8 @@ contextBridge.exposeInMainWorld('api', {
     setSetting: (k, v) => ipcRenderer.invoke('set-setting', k, v),
 
     // Disk size
-    getDiskSize: (p) => ipcRenderer.invoke('get-disk-size', p),
+    getDiskSize:     (p) => ipcRenderer.invoke('get-disk-size', p),
+    verifyInstalls:  ()  => ipcRenderer.invoke('verify-installs'),
 
     // Environment
     checkTools:   () => ipcRenderer.invoke('check-tools'),
