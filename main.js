@@ -404,8 +404,28 @@ ipcMain.handle('check-tools', () => {
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
 
-// Pre-install size info for GOG games via gogdl info
+// Pre-install size info for GOG games
+// Windows: use gogdl info (depot-based, returns precise sizes)
+// Linux:   use GOG API directly (installer files; gogdl's linux manager doesn't expose size)
 ipcMain.handle('gog-install-info', async (_, appId, platform) => {
+    if (platform === 'linux') {
+        // GOG API: sum all Linux installer file sizes
+        try {
+            const token = await getGogToken();
+            if (!token) return null;
+            const data = await gogFetch(
+                `https://api.gog.com/products/${appId}?expand=downloads`, token
+            );
+            const installers = (data.downloads?.installers || []).filter(i => i.os === 'linux');
+            let download_size = 0;
+            for (const inst of installers) {
+                for (const file of inst.files || []) download_size += file.size || 0;
+            }
+            return download_size > 0 ? { download_size, disk_size: download_size } : null;
+        } catch { return null; }
+    }
+
+    // Windows: use gogdl info for depot-based size breakdown
     const gogdl = findGogdl();
     if (!gogdl) return null;
     try { fs.chmodSync(gogdl, '755'); } catch {}
