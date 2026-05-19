@@ -1,0 +1,40 @@
+{
+  "name": "grinder",
+  "version": "0.1.0",
+  "description": "Cafe Neurotico GRINDER — Game launcher and install engine",
+  "main": "main.js",
+  "scripts": {
+    "postinstall": "electron-builder install-app-deps",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --linux AppImage"
+  },
+  "author": "Shampoo is a Lie",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "better-sqlite3": "^12.9.0"
+  },
+  "devDependencies": {
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.cafeneurotico.grinder",
+    "productName": "GRINDER",
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icons/grinder_icon.svg",
+      "category": "Game"
+    },
+    "appImage": {
+      "artifactName": "GRINDER.AppImage"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "assets/icons/**/*"
+    ]
+  }
+}

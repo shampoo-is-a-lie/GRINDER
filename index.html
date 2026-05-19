@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRINDER</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700;900&display=swap" rel="stylesheet">
+  <script>
+    /* Apply cached theme instantly — eliminates flash */
+    (function() {
+      try {
+        const c = JSON.parse(localStorage.getItem('cngm_theme_cache') || '{}');
+        const r = document.documentElement;
+        for (const [k,v] of Object.entries(c)) r.style.setProperty('--'+k, v);
+      } catch(e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #1a0f0a; --bg_panel: rgba(67,40,24,0.35); --bg_menu: #2d1a10;
+      --accent: #d4813a; --accent_menu: #d4813a;
+      --text_main: #f5e8d0; --text_sec: #c4a882; --text_dim: #8B7355;
+      --border: rgba(212,129,58,0.15); --border_solid: #8B5A2B;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Raleway', sans-serif; background: var(--bg); color: var(--text_main);
+           display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* ── Titlebar ── */
+    #titlebar { height: 35px; flex-shrink: 0; background: var(--bg_menu);
+                display: flex; justify-content: space-between; align-items: center;
+                border-bottom: 1px solid var(--border_solid); user-select: none;
+                -webkit-app-region: drag; z-index: 9999; }
+    .titlebar-brand { padding-left: 16px; font-size: 13px; font-weight: 900;
+                      color: var(--accent); letter-spacing: 4px; }
+    .titlebar-brand span { color: var(--text_dim); font-size: 10px; letter-spacing: 2px; margin-left: 8px; }
+    .titlebar-controls { display: flex; height: 100%; -webkit-app-region: no-drag; }
+    .win-btn { border: none; border-radius: 0; background: transparent; width: 42px;
+               font-size: 14px; display: flex; align-items: center; justify-content: center;
+               cursor: pointer; color: var(--text_main); transition: background 0.1s; }
+    .win-btn:hover { background: rgba(255,255,255,0.1); }
+    .win-close:hover { background: #d32f2f; color: #fff; }
+
+    /* ── Layout ── */
+    #app { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar { width: 200px; flex-shrink: 0; background: var(--bg_panel);
+               border-right: 1px solid var(--border_solid);
+               display: flex; flex-direction: column; padding: 12px 8px; gap: 4px; }
+    .sidebar-logo { text-align: center; padding: 12px 0 20px; border-bottom: 1px solid var(--border_solid); margin-bottom: 8px; }
+    .sidebar-logo img { width: 48px; height: 48px; }
+    .sidebar-logo p { font-size: 9px; color: var(--text_dim); letter-spacing: 2px; margin-top: 6px; text-transform: uppercase; }
+
+    .nav-btn { background: transparent; border: 1px solid transparent; color: var(--text_sec);
+               text-align: left; padding: 9px 10px; font-size: 11px; font-weight: 900;
+               letter-spacing: 1px; text-transform: uppercase; border-radius: 5px;
+               cursor: pointer; font-family: 'Raleway', sans-serif; transition: 0.2s; }
+    .nav-btn:hover, .nav-btn.active { background: var(--border_solid); color: var(--text_main); border-color: var(--accent); }
+
+    #sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border_solid); display: flex; flex-direction: column; gap: 4px; }
+    .tool-status { font-size: 10px; font-weight: 700; padding: 4px 8px; display: flex; gap: 6px; align-items: center; color: var(--text_dim); }
+    .tool-status .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; flex-shrink: 0; }
+    .tool-status .dot.ok  { background: #66bb6a; }
+    .tool-status .dot.err { background: #ef5350; }
+
+    /* ── Main content ── */
+    #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── View: Games list ── */
+    #view-games { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #games-toolbar { padding: 12px 16px; display: flex; gap: 10px; align-items: center;
+                     border-bottom: 1px solid var(--border_solid); flex-shrink: 0; background: rgba(0,0,0,0.15); }
+    #games-toolbar input { flex: 1; background: var(--bg_panel); border: 1px solid var(--border_solid);
+                           color: var(--text_main); padding: 7px 12px; border-radius: 5px;
+                           font-family: 'Raleway', sans-serif; font-size: 12px; outline: none; }
+    #games-toolbar input:focus { border-color: var(--accent); }
+    #games-toolbar button { background: var(--accent); border: none; color: var(--bg);
+                            padding: 7px 14px; border-radius: 5px; font-family: 'Raleway', sans-serif;
+                            font-weight: 900; font-size: 11px; letter-spacing: 1px; cursor: pointer; transition: 0.2s; }
+    #games-toolbar button:hover { filter: brightness(1.15); }
+
+    #games-list { flex: 1; overflow-y: auto; }
+    #games-list::-webkit-scrollbar { width: 5px; }
+    #games-list::-webkit-scrollbar-thumb { background: var(--border_solid); border-radius: 3px; }
+
+    .game-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+                border-bottom: 1px solid rgba(139,90,43,0.2); transition: background 0.15s; cursor: default; }
+    .game-row:hover { background: rgba(212,129,58,0.06); }
+    .game-row.selected { background: rgba(212,129,58,0.12); border-left: 3px solid var(--accent); padding-left: 13px; }
+
+    .game-store-badge { font-size: 9px; font-weight: 900; letter-spacing: 1px; padding: 2px 7px;
+                        border-radius: 3px; text-transform: uppercase; flex-shrink: 0; }
+    .badge-epic   { background: rgba(0,200,140,0.15); color: #00c88c; border: 1px solid rgba(0,200,140,0.3); }
+    .badge-gog    { background: rgba(139,43,226,0.15); color: #9b59d9; border: 1px solid rgba(139,43,226,0.3); }
+    .badge-custom { background: rgba(139,90,43,0.15); color: var(--text_dim); border: 1px solid var(--border_solid); }
+
+    .game-title { flex: 1; font-size: 13px; font-weight: 700; color: var(--text_main); }
+    .game-status { font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .status-installed   { color: #66bb6a; }
+    .status-uninstalled { color: #ef5350; }
+
+    .game-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .game-actions button { border: none; border-radius: 4px; padding: 4px 10px; font-family: 'Raleway', sans-serif;
+                           font-size: 10px; font-weight: 900; cursor: pointer; letter-spacing: 0.5px; transition: 0.15s; }
+    .btn-launch  { background: var(--accent); color: var(--bg); }
+    .btn-launch:hover  { filter: brightness(1.15); }
+    .btn-edit    { background: transparent; color: var(--text_sec); border: 1px solid var(--border_solid) !important; }
+    .btn-edit:hover    { border-color: var(--accent) !important; color: var(--text_main); }
+    .btn-delete  { background: transparent; color: #ef5350; border: 1px solid rgba(239,83,80,0.3) !important; }
+    .btn-delete:hover  { background: rgba(239,83,80,0.1); }
+
+    #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text_dim); }
+    #empty-state p { font-size: 13px; letter-spacing: 1px; }
+
+    /* ── View: Settings ── */
+    #view-settings { flex: 1; overflow-y: auto; padding: 24px; display: none; }
+    #view-settings::-webkit-scrollbar { width: 5px; }
+    #view-settings::-webkit-scrollbar-thumb { background: var(--border_solid); border-radius: 3px; }
+    .settings-section { margin-bottom: 28px; }
+    .settings-section h3 { font-size: 11px; font-weight: 900; color: var(--accent); letter-spacing: 2px;
+                           text-transform: uppercase; border-bottom: 1px solid var(--border_solid);
+                           padding-bottom: 6px; margin-bottom: 14px; }
+    .setting-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .setting-row label { font-size: 11px; font-weight: 700; color: var(--text_sec); text-transform: uppercase; letter-spacing: 1px; }
+    .setting-row input { background: var(--bg_panel); border: 1px solid var(--border_solid); color: var(--text_main);
+                         padding: 8px 12px; border-radius: 5px; font-family: 'Raleway', sans-serif;
+                         font-size: 12px; outline: none; }
+    .setting-row input:focus { border-color: var(--accent); }
+    .setting-row p { font-size: 11px; color: var(--text_dim); line-height: 1.5; }
+    .btn-save-settings { background: var(--accent); border: none; color: var(--bg); padding: 9px 20px;
+                         border-radius: 5px; font-family: 'Raleway', sans-serif; font-weight: 900;
+                         font-size: 12px; cursor: pointer; letter-spacing: 1px; transition: 0.2s; }
+    .btn-save-settings:hover { filter: brightness(1.15); }
+
+    /* ── Modal: Add/Edit game ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+                     backdrop-filter: blur(10px); z-index: 500;
+                     display: flex; align-items: center; justify-content: center;
+                     opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal-box { background: var(--bg_menu); border: 1px solid var(--border_solid); border-radius: 10px;
+                 padding: 24px; width: 520px; max-width: 95vw; display: flex; flex-direction: column; gap: 14px;
+                 box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+    .modal-box h3 { font-size: 13px; font-weight: 900; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+    .modal-row { display: flex; flex-direction: column; gap: 5px; }
+    .modal-row label { font-size: 10px; font-weight: 900; color: var(--text_dim); text-transform: uppercase; letter-spacing: 1px; }
+    .modal-row input, .modal-row select { background: var(--bg); border: 1px solid var(--border_solid); color: var(--text_main);
+                                          padding: 8px 10px; border-radius: 5px; font-family: 'Raleway', sans-serif;
+                                          font-size: 12px; outline: none; }
+    .modal-row input:focus, .modal-row select:focus { border-color: var(--accent); }
+    .modal-row select option { background: var(--bg_menu); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+    .modal-actions button { border: none; border-radius: 5px; padding: 9px 18px; font-family: 'Raleway', sans-serif;
+                            font-weight: 900; font-size: 11px; letter-spacing: 1px; cursor: pointer; transition: 0.2s; }
+    .btn-confirm { background: var(--accent); color: var(--bg); }
+    .btn-confirm:hover { filter: brightness(1.15); }
+    .btn-cancel  { background: transparent; color: var(--text_sec); border: 1px solid var(--border_solid) !important; }
+    .btn-cancel:hover { border-color: var(--accent) !important; }
+
+    /* ── Status bar ── */
+    #statusbar { height: 26px; flex-shrink: 0; background: rgba(0,0,0,0.3);
+                 border-top: 1px solid var(--border_solid);
+                 display: flex; align-items: center; padding: 0 14px;
+                 font-size: 10px; color: var(--text_dim); letter-spacing: 0.5px; gap: 16px; }
+    #status-msg { flex: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Add/Edit Game Modal -->
+  <div id="modal-game" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="modal-title">Add Game</h3>
+      <input type="hidden" id="edit-id">
+      <div class="modal-row"><label>Title</label><input id="edit-title" placeholder="Game title"></div>
+      <div class="modal-row">
+        <label>Store</label>
+        <select id="edit-store">
+          <option value="custom">Custom / Other</option>
+          <option value="epic">Epic Games</option>
+          <option value="gog">GOG</option>
+        </select>
+      </div>
+      <div class="modal-row"><label>Store App ID (Legendary app name / GOG ID)</label><input id="edit-appid" placeholder="e.g. Celeste or 1207665503"></div>
+      <div class="modal-row"><label>Install Path</label><input id="edit-install-path" placeholder="/path/to/game/directory"></div>
+      <div class="modal-row"><label>Executable (relative to install path)</label><input id="edit-exe" placeholder="Game.exe"></div>
+      <div class="modal-row"><label>Wine Prefix (leave blank for default)</label><input id="edit-prefix" placeholder="~/.local/share/grinder/prefixes/game-id"></div>
+      <div class="modal-row"><label>Proton Path (leave blank for default)</label><input id="edit-proton" placeholder="/path/to/Proton-GE"></div>
+      <div class="modal-row"><label>Notes</label><input id="edit-notes" placeholder="Optional notes"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
+        <button class="btn-confirm" id="btn-modal-save">Save Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Titlebar -->
+  <div id="titlebar">
+    <div class="titlebar-brand">GRINDER <span>by Cafe Neurotico</span></div>
+    <div class="titlebar-controls">
+      <button class="win-btn" id="btn-min" title="Minimize">&#x2014;</button>
+      <button class="win-btn" id="btn-max" title="Maximize">&#x25A1;</button>
+      <button class="win-btn win-close" id="btn-close" title="Close">&#x2715;</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="sidebar-logo">
+        <img src="assets/icons/grinder_icon.svg" alt="GRINDER">
+        <p>Launch Engine</p>
+      </div>
+      <button class="nav-btn active" data-view="games">&#x25B6; Games</button>
+      <button class="nav-btn" data-view="settings">&#x2699; Settings</button>
+
+      <div id="sidebar-footer">
+        <div class="tool-status" id="status-legendary"><div class="dot"></div>legendary</div>
+        <div class="tool-status" id="status-umu"><div class="dot"></div>umu-run</div>
+        <div class="tool-status" id="status-wine"><div class="dot"></div>wine</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div id="content">
+      <!-- Games view -->
+      <div id="view-games">
+        <div id="games-toolbar">
+          <input id="search-input" placeholder="Search games..." autocomplete="off">
+          <button id="btn-add-game">+ Add Game</button>
+        </div>
+        <div id="games-list"></div>
+      </div>
+
+      <!-- Settings view -->
+      <div id="view-settings">
+        <div class="settings-section">
+          <h3>&#x2699; Launch Engine</h3>
+          <div class="setting-row">
+            <label>Default Proton Path</label>
+            <input id="s-proton" placeholder="/home/user/.steam/root/steamapps/common/Proton - Experimental">
+            <p>Path to your preferred Proton installation. Used for games without a per-game Proton set. GE-Proton is recommended — install it with ProtonUp-Qt.</p>
+          </div>
+          <div class="setting-row">
+            <label>Default Prefix Directory</label>
+            <input id="s-prefix-dir" placeholder="~/.local/share/grinder/prefixes">
+            <p>Where per-game Wine prefixes are created by default. Each game gets its own subfolder named by game ID.</p>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>&#x1F9EA; External Tools</h3>
+          <div id="tools-info" style="font-size:12px; color: var(--text_sec); line-height: 1.7;">Checking...</div>
+        </div>
+        <button class="btn-save-settings" id="btn-save-settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <span id="status-msg">Ready.</span>
+    <span id="status-count"></span>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
