@@ -900,7 +900,12 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
             activeGogInstallProc = null;
             try { fs.unlinkSync(authPath); } catch {}
             const gameInfo = code === 0 ? findGogInstallResult(dir, appId) : null;
-            resolve({ ok: code === 0, exitCode: code, install_dir: dir, gameInfo });
+            // Exit 0 with no game files on disk = gogdl said "Nothing to do" — treat as failure
+            const ok = code === 0 && gameInfo !== null;
+            resolve({ ok, exitCode: code, install_dir: dir, gameInfo,
+                      error: code === 0 && !gameInfo
+                          ? 'gogdl exited without downloading any files. The game may not support this platform or the manifest is cached incorrectly. Try verifying your GOG login.'
+                          : undefined });
         });
         activeGogInstallProc.on('error', e => {
             activeGogInstallProc = null;
