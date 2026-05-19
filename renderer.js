@@ -135,13 +135,13 @@ function renderGames(games) {
             e.stopPropagation();
             const id = btn.dataset.launch;
             const title = allGames.find(g=>g.id===id)?.title || '';
+            showNowPlaying(title);
             setStatus(`Launching "${title}"...`);
-            btn.textContent = '⏳ Launching…';
             btn.disabled = true;
             const result = await window.api.launchGame(id);
             btn.disabled = false;
-            btn.textContent = '▶ Launch';
-            setStatus(result.ok ? `Launched via ${result.method}.` : `Error: ${result.error}`);
+            if (!result.ok) { closeNowPlaying(); setStatus(`Error: ${result.error}`); }
+            else setStatus(`Launched via ${result.method}.`);
         });
     });
 
@@ -950,6 +950,30 @@ function showConfirm(title, bodyHtml) {
         modal.onclick  = (e) => { if (e.target === modal) done(false); };
     });
 }
+
+// ── Now Playing popup ─────────────────────────────────────────────────────────
+let _npTimer = null;
+
+function showNowPlaying(title) {
+    const modal   = document.getElementById('modal-now-playing');
+    const titleEl = document.getElementById('np-title');
+    if (!modal) return;
+    titleEl.textContent = title || '';
+    modal.classList.add('active');
+    clearTimeout(_npTimer);
+    _npTimer = setTimeout(closeNowPlaying, 5000);
+}
+
+function closeNowPlaying() {
+    clearTimeout(_npTimer);
+    document.getElementById('modal-now-playing')?.classList.remove('active');
+}
+
+document.getElementById('modal-now-playing')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-now-playing')) closeNowPlaying();
+});
+document.getElementById('np-close-btn')?.addEventListener('click', closeNowPlaying);
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Status bar ────────────────────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('status-msg').textContent = msg; }
