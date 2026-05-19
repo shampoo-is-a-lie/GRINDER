@@ -337,7 +337,9 @@ ipcMain.handle('legendary-status', async () => {
 
 // Open Epic login window and authenticate legendary
 ipcMain.handle('legendary-login', event => {
-    const AUTH_URL = 'https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9&responseType=code';
+    // legendary.gl/epiclogin is maintained by the legendary team and always uses
+    // the current valid Epic client ID — avoids hardcoding one that can be revoked.
+    const AUTH_URL = 'https://legendary.gl/epiclogin';
     const leg = findLegendary();
     if (!leg) return Promise.resolve({ ok: false, error: 'legendary not found' });
 
@@ -345,7 +347,7 @@ ipcMain.handle('legendary-login', event => {
         let resolved = false;
 
         const authWin = new BrowserWindow({
-            width: 520, height: 720, title: 'Login to Epic Games',
+            width: 560, height: 780, title: 'Login to Epic Games — close when done',
             webPreferences: { nodeIntegration: false, contextIsolation: true },
         });
         authWin.setMenu(null);
