@@ -299,6 +299,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
 // ── Installation ──────────────────────────────────────────────────────────────
 const modalInstall = document.getElementById('modal-install');
 let installingGame = null;
+let selectedPlatform = null; // tracks user's platform choice for current install
 
 function openInstallModal(game) {
     installingGame = game;
@@ -312,6 +313,28 @@ function openInstallModal(game) {
     document.getElementById('install-pct-label').textContent = '0%';
     document.getElementById('install-speed-label').textContent = '';
     document.getElementById('install-eta-label').textContent = '';
+
+    // Platform selector — show only for GOG games with multiple platforms available
+    const platRow    = document.getElementById('install-platform-row');
+    const platLinux  = document.getElementById('plat-linux');
+    const platWin    = document.getElementById('plat-windows');
+    const availPlats = (game.platforms || game.platform || '').split(',').filter(Boolean);
+    const hasChoice  = game.store === 'gog' && availPlats.includes('linux') && availPlats.includes('windows');
+
+    selectedPlatform = game.platform || 'windows';
+
+    if (platRow) platRow.style.display = hasChoice ? 'flex' : 'none';
+    if (hasChoice) {
+        const setPlat = p => {
+            selectedPlatform = p;
+            platLinux.classList.toggle('active', p === 'linux');
+            platWin.classList.toggle('active', p === 'windows');
+            fetchInstallSizes();
+        };
+        setPlat(selectedPlatform);
+        platLinux.onclick  = () => setPlat('linux');
+        platWin.onclick    = () => setPlat('windows');
+    }
 
     // Pre-fill install dir from settings, then fetch sizes
     window.api.getSetting('default_install_dir').then(d => {
@@ -338,9 +361,10 @@ async function fetchInstallSizes() {
 
     const dir = document.getElementById('install-dir-input').value.trim() || '~/Games/CafeNeurotico';
 
+    const platform = selectedPlatform || installingGame.platform || 'windows';
     const [sizeInfo, available] = await Promise.all([
         installingGame.store === 'gog'
-            ? window.api.gogInstallInfo(installingGame.app_id, installingGame.platform || 'windows')
+            ? window.api.gogInstallInfo(installingGame.app_id, platform)
             : window.api.epicInstallInfo(installingGame.app_id),
         window.api.getDiskSpace(dir),
     ]);
@@ -434,7 +458,8 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
 
     let result;
     if (installingGame.store === 'gog') {
-        result = await window.api.gogInstall(installingGame.app_id, installingGame.platform || 'windows', dir);
+        const platform = selectedPlatform || installingGame.platform || 'windows';
+        result = await window.api.gogInstall(installingGame.app_id, platform, dir);
     } else {
         result = await window.api.installGame(installingGame.app_id, dir);
     }
@@ -444,12 +469,10 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     if (result.ok) {
         if (installingGame.store === 'gog') {
             const gi = result.gameInfo;
-            // Only store install_path if we found the actual game subfolder via goggame-*.info.
-            // Falling back to the base dir (result.install_dir) would make uninstall delete
-            // the entire CafeNeurotico folder — so leave it null if we can't determine the subdir.
             await window.api.updateGame(installingGame.id, {
                 install_path: gi?.install_path || null,
                 executable:   gi?.executable   || null,
+                platform:     selectedPlatform || installingGame.platform || 'windows',
                 installed:    1,
             });
         } else {

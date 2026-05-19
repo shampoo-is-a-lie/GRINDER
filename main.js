@@ -54,6 +54,7 @@ function initDb() {
     `);
     // Migrations
     try { db.prepare("ALTER TABLE games ADD COLUMN platform TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN platforms TEXT").run(); } catch(e) {} // comma-separated available platforms
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -889,9 +890,10 @@ ipcMain.handle('gog-list-owned', async () => {
             const items = Array.isArray(data) ? data : [data];
             for (const item of items) {
                 if (!item?.id) continue;
-                const oses     = (item.downloads?.installers || []).map(x => x.os).filter(Boolean);
-                const platform = oses.includes('linux') ? 'linux' : 'windows';
-                games.push({ id: String(item.id), title: item.title || 'Unknown', platform });
+                const oses      = [...new Set((item.downloads?.installers || []).map(x => x.os).filter(Boolean))];
+                const platform  = oses.includes('linux') ? 'linux' : 'windows';
+                const platforms = oses.filter(o => o === 'linux' || o === 'windows').join(',') || platform;
+                games.push({ id: String(item.id), title: item.title || 'Unknown', platform, platforms });
             }
         }
         return { ok: true, games };
@@ -900,11 +902,11 @@ ipcMain.handle('gog-list-owned', async () => {
 
 ipcMain.handle('gog-import', (_, games) => {
     const stmt = db.prepare(
-        "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, installed) VALUES (?, ?, 'gog', ?, ?, 0)"
+        "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, platforms, installed) VALUES (?, ?, 'gog', ?, ?, ?, 0)"
     );
     const tx = db.transaction(list => {
         let n = 0;
-        for (const g of list) { stmt.run('gog_' + g.id, g.title, g.id, g.platform || 'windows'); n++; }
+        for (const g of list) { stmt.run('gog_' + g.id, g.title, g.id, g.platform || 'windows', g.platforms || g.platform || 'windows'); n++; }
         return n;
     });
     try { return { ok: true, count: tx(games) }; }

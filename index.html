@@ -202,6 +202,12 @@
           </div>
           <p style="font-size:11px; color:var(--text_dim); margin:4px 0 0; line-height:1.5;">The game will be installed inside a subfolder here. Make sure you have enough disk space.</p>
         </div>
+        <!-- Platform selector — only shown for GOG games with both builds -->
+        <div id="install-platform-row" style="display:none; gap:6px;">
+          <label style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px; align-self:center; flex-shrink:0;">Platform</label>
+          <button id="plat-linux" class="store-tab" style="flex:1; border:1px solid var(--border_solid); border-radius:4px; padding:6px;">Linux</button>
+          <button id="plat-windows" class="store-tab" style="flex:1; border:1px solid var(--border_solid); border-radius:4px; padding:6px;">Windows</button>
+        </div>
         <div id="install-size-info" style="display:flex; align-items:center; gap:16px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:5px; border:1px solid var(--border_solid); font-size:11px; color:var(--text_dim); min-height:34px; flex-wrap:wrap;">
           <span id="install-size-text">Fetching size info…</span>
         </div>
