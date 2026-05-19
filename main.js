@@ -357,7 +357,9 @@ ipcMain.handle('legendary-login', event => {
             if (resolved) return;
             try {
                 const text = await authWin.webContents.executeJavaScript('document.body.innerText');
-                const m = text.match(/"exchangeCode"\s*:\s*"([^"]+)"/);
+                // Epic returns authorizationCode (current) or exchangeCode (older flow)
+                const m = text.match(/"authorizationCode"\s*:\s*"([^"]+)"/) ||
+                          text.match(/"exchangeCode"\s*:\s*"([^"]+)"/);
                 if (!m) return;
                 resolved = true;
                 authWin.close();
@@ -371,8 +373,11 @@ ipcMain.handle('legendary-login', event => {
             } catch {}
         }
 
-        authWin.webContents.on('did-finish-load', tryExtract);
-        authWin.webContents.on('did-navigate', tryExtract);
+        authWin.webContents.on('did-finish-load',    tryExtract);
+        authWin.webContents.on('did-navigate',        tryExtract);
+        authWin.webContents.on('did-navigate-in-page', tryExtract);
+        // Extra poll — sometimes the page is already loaded before listeners attach
+        setTimeout(tryExtract, 1500);
         authWin.on('closed', () => { if (!resolved) resolve({ ok: false, error: 'Window closed before login completed.' }); });
     });
 });
