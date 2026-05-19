@@ -1051,6 +1051,11 @@ window.api.onCliSearch(term => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadProtonVersions();
-loadGames();
 refreshLegendaryStatus();
 refreshGogStatus();
+
+// Auto-verify on startup: check for missing game files, then load
+window.api.verifyInstalls().then(({ reset }) => {
+    loadGames();
+    if (reset > 0) setStatus(`${reset} game${reset !== 1 ? 's' : ''} with missing files reset — ready to reinstall.`);
+});
