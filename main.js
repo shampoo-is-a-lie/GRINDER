@@ -529,6 +529,24 @@ ipcMain.handle('get-disk-size', (_, dirPath) => {
         });
     });
 });
+
+// Single batch call — returns { id: size } for all installed games at once.
+// Avoids N concurrent IPC round-trips which can cause race conditions.
+ipcMain.handle('get-all-disk-sizes', () => {
+    const { exec } = require('child_process');
+    const installed = db.prepare(
+        "SELECT id, install_path FROM games WHERE installed=1 AND install_path IS NOT NULL"
+    ).all();
+    return Promise.all(installed.map(g => {
+        const p = expandTilde(g.install_path);
+        if (!p || !fs.existsSync(p)) return Promise.resolve({ id: g.id, size: null });
+        return new Promise(resolve => {
+            exec(`du -sh "${p}" 2>/dev/null`, { timeout: 15000 }, (err, stdout) => {
+                resolve({ id: g.id, size: err ? null : stdout.split('\t')[0].trim() });
+            });
+        });
+    }));
+});
 ipcMain.handle('get-config-dir', () => configDir);
 
 // Proton

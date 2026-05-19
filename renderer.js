@@ -267,18 +267,18 @@ async function loadGames() {
     allGames = await window.api.getGames();
     buildFilterBar();
     renderGames(filterGames());
-    loadGameSizes();
+    await loadGameSizes();
 }
 
 async function loadGameSizes() {
-    const installed = allGames.filter(g => g.installed && g.install_path);
-    // Run all du calls in parallel, then re-query the element AFTER the result
-    // arrives — avoids stale references if a re-render happened during the wait.
-    await Promise.all(installed.map(async g => {
-        const size = await window.api.getDiskSize(g.install_path);
-        const el = document.querySelector(`[data-size="${g.id}"]`);
-        if (el) el.textContent = size || '';
-    }));
+    // Single batch IPC — all du calls run in parallel on the main process side,
+    // one response comes back, one synchronous DOM pass updates all badges.
+    const sizes = await window.api.getAllDiskSizes();
+    for (const { id, size } of sizes) {
+        if (!size) continue;
+        const el = document.querySelector(`[data-size="${id}"]`);
+        if (el) el.textContent = size;
+    }
 }
 
 document.getElementById('search-input').addEventListener('input', () => renderGames(filterGames()));

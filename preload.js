@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // Disk size (installed game)
     getDiskSize:      (p)              => ipcRenderer.invoke('get-disk-size', p),
+    getAllDiskSizes:   ()               => ipcRenderer.invoke('get-all-disk-sizes'),
     verifyInstalls:   ()               => ipcRenderer.invoke('verify-installs'),
     // Pre-install size info
     gogInstallInfo:   (id, platform)   => ipcRenderer.invoke('gog-install-info', id, platform),
