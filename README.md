@@ -53,7 +53,7 @@ GRINDER.AppImage launch <game_id>
    ./GRINDER.AppImage
    ```
 
-On first launch, GRINDER creates its configuration at `~/.config/GRINDER/`. Your game library and settings live there.
+On first launch, GRINDER creates its configuration in the standard user data directory (typically `~/.local/share/grinder/` or `~/.config/grinder/` depending on your system). The game library database and Wine prefixes live there. Game files themselves are installed to `~/Games/CafeNeurotico/` by default — you can change this per-install.
 
 **CNGM integration:** place `GRINDER.AppImage` in the same folder as `CNGM.AppImage`. CNGM will auto-detect it — no configuration needed. Open any Epic game's edit panel in CNGM to see the GRINDER status row and toggle it on.
 
