@@ -37,6 +37,7 @@ async function checkTools() {
     const tools = await window.api.checkTools();
     function setDot(id, value) {
         const el = document.getElementById(id);
+        if (!el) return;
         el.querySelector('.dot').className = 'dot ' + (value ? 'ok' : 'err');
         el.title = value || 'Not found';
     }
@@ -45,11 +46,26 @@ async function checkTools() {
     setDot('status-wine',      tools.wine);
 
     const info = document.getElementById('tools-info');
+    if (!info) return;
     info.innerHTML = [
-        `<strong style="color:var(--text_main)">legendary</strong>: ${tools.legendary || '<span style="color:#ef5350">not found — install via pip or package manager</span>'}`,
-        `<strong style="color:var(--text_main)">umu-run</strong>: ${tools.umu || '<span style="color:#ef5350">not found — install umu-launcher</span>'}`,
-        `<strong style="color:var(--text_main)">wine</strong>: ${tools.wine || '<span style="color:#ef5350">not found</span>'}`,
-    ].join('<br>');
+        `<strong style="color:var(--text_main)">legendary</strong>: ${
+            tools.legendary
+                ? (tools.legendary_bundled
+                    ? `<span style="color:#66bb6a">✓ bundled (${tools.legendary})</span>`
+                    : `<span style="color:#ffb74d">⚠ system install (${tools.legendary})</span>`)
+                : '<span style="color:#ef5350">not found</span>'
+        }`,
+        `<strong style="color:var(--text_main)">umu-run</strong>: ${
+            tools.umu
+                ? `<span style="color:#66bb6a">✓ ${tools.umu}</span>`
+                : '<span style="color:#ffb74d">not found — install via package manager for best compatibility. GRINDER will use direct Proton invocation as fallback.</span>'
+        }`,
+        `<strong style="color:var(--text_main)">wine</strong>: ${
+            tools.wine
+                ? `<span style="color:#66bb6a">✓ ${tools.wine}</span>`
+                : '<span style="color:var(--text_dim)">not found (optional — only needed as last resort)</span>'
+        }`,
+    ].join('<br><br>');
 }
 checkTools();
 

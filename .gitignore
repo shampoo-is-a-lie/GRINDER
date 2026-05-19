@@ -3,3 +3,4 @@ dist/
 GRINDERConfig/
 *.AppImage
 .vscode/
+assets/bin/linux/legendary

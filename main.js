@@ -115,14 +115,28 @@ function scanProtonVersions() {
     });
 }
 
+// ── Bundled binary paths ──────────────────────────────────────────────────────
+// In packaged AppImage, extraResources land in process.resourcesPath/assets/bin/linux.
+// In dev, they live in __dirname/assets/bin/linux.
+const binDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'assets', 'bin', 'linux')
+    : path.join(__dirname, 'assets', 'bin', 'linux');
+
+const BUNDLED_LEGENDARY = path.join(binDir, 'legendary');
+
 // ── External tool helpers ─────────────────────────────────────────────────────
 function which(bin) {
     try { return execSync(`which ${bin}`, { stdio: ['ignore','pipe','ignore'] }).toString().trim(); }
     catch { return null; }
 }
 
-function findLegendary() { return which('legendary'); }
-function findUmu()       { return which('umu-run'); }
+// Prefer bundled legendary; fall back to system install
+function findLegendary() {
+    if (fs.existsSync(BUNDLED_LEGENDARY)) return BUNDLED_LEGENDARY;
+    return which('legendary');
+}
+// umu-run cannot be bundled (Python module); detect system install only
+function findUmu() { return which('umu-run'); }
 
 // ── Launch engine ─────────────────────────────────────────────────────────────
 async function launchGame(gameId) {
@@ -144,28 +158,47 @@ async function launchGame(gameId) {
         }
     }
 
-    // Universal: umu-run (preferred) or raw Wine/Proton
+    // Validate executable
     const exe = path.join(game.install_path || '', game.executable || '');
     if (!game.executable || !fs.existsSync(exe)) {
         throw new Error(`Executable not found: ${exe || '(not set)'}`);
     }
 
-    const env = {
-        ...process.env,
-        WINEPREFIX: prefix,
-        PROTONPATH:  proton,
-        GAMEID:      game.app_id || `grinder-${gameId}`,
-    };
-
+    // Launch priority:
+    // 1. umu-run (best compatibility — DXVK/VKD3D managed automatically)
+    // 2. Direct Proton invocation (works without umu, requires Proton path set)
+    // 3. Raw Wine (last resort)
     const umu = findUmu();
     if (umu) {
+        const env = {
+            ...process.env,
+            WINEPREFIX:  prefix,
+            PROTONPATH:  proton,
+            GAMEID:      game.app_id || `grinder-${gameId}`,
+        };
         spawn(umu, [exe], { env, detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'umu-run' };
     }
 
-    // Last resort: raw Wine
-    const wine = proton ? path.join(proton, 'bin', 'wine') : 'wine';
-    spawn(wine, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+    if (proton) {
+        // Direct Proton: sets the env variables Proton's script expects
+        const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
+        const env = {
+            ...process.env,
+            WINEPREFIX:                       prefix,
+            STEAM_COMPAT_DATA_PATH:           prefix,
+            STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot,
+        };
+        const protonBin = path.join(proton, 'proton');
+        if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
+        spawn(protonBin, ['run', exe], { env, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'proton-direct' };
+    }
+
+    // Raw Wine fallback
+    const wine = which('wine');
+    if (!wine) throw new Error('No launch method available: umu-run not found, no Proton path set, and wine is not installed.');
+    spawn(wine, [exe], { env: { ...process.env, WINEPREFIX: prefix }, detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
 
@@ -255,11 +288,15 @@ ipcMain.handle('get-setting', (_, key) => db.prepare("SELECT value FROM settings
 ipcMain.handle('set-setting', (_, key, value) => { db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)").run(key, value); return true; });
 
 // Environment checks
-ipcMain.handle('check-tools', () => ({
-    legendary: findLegendary(),
-    umu:       findUmu(),
-    wine:      which('wine'),
-}));
+ipcMain.handle('check-tools', () => {
+    const leg = findLegendary();
+    return {
+        legendary:        leg,
+        legendary_bundled: leg === BUNDLED_LEGENDARY,
+        umu:              findUmu(),
+        wine:             which('wine'),
+    };
+});
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
 ipcMain.handle('get-config-dir', () => configDir);
