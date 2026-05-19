@@ -22,9 +22,13 @@ contextBridge.exposeInMainWorld('api', {
     getSetting: (k)    => ipcRenderer.invoke('get-setting', k),
     setSetting: (k, v) => ipcRenderer.invoke('set-setting', k, v),
 
-    // Disk size
-    getDiskSize:     (p) => ipcRenderer.invoke('get-disk-size', p),
-    verifyInstalls:  ()  => ipcRenderer.invoke('verify-installs'),
+    // Disk size (installed game)
+    getDiskSize:      (p)              => ipcRenderer.invoke('get-disk-size', p),
+    verifyInstalls:   ()               => ipcRenderer.invoke('verify-installs'),
+    // Pre-install size info
+    gogInstallInfo:   (id, platform)   => ipcRenderer.invoke('gog-install-info', id, platform),
+    epicInstallInfo:  (appName)        => ipcRenderer.invoke('epic-install-info', appName),
+    getDiskSpace:     (path)           => ipcRenderer.invoke('get-disk-space', path),
 
     // Environment
     checkTools:   () => ipcRenderer.invoke('check-tools'),

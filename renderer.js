@@ -313,9 +313,10 @@ function openInstallModal(game) {
     document.getElementById('install-speed-label').textContent = '';
     document.getElementById('install-eta-label').textContent = '';
 
-    // Pre-fill install dir from settings
+    // Pre-fill install dir from settings, then fetch sizes
     window.api.getSetting('default_install_dir').then(d => {
         document.getElementById('install-dir-input').value = d || '~/Games/CafeNeurotico';
+        fetchInstallSizes();
     });
 
     modalInstall.classList.add('active');
@@ -323,12 +324,52 @@ function openInstallModal(game) {
 
 function closeInstallModal() { modalInstall.classList.remove('active'); installingGame = null; }
 
+function fmtBytes(b) {
+    return b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
+}
+
+async function fetchInstallSizes() {
+    const el  = document.getElementById('install-size-text');
+    const btn = document.getElementById('btn-install-start');
+    if (!el || !installingGame) return;
+
+    el.textContent = 'Fetching size info…';
+    if (btn) { btn.disabled = false; btn.title = ''; }
+
+    const dir = document.getElementById('install-dir-input').value.trim() || '~/Games/CafeNeurotico';
+
+    const [sizeInfo, available] = await Promise.all([
+        installingGame.store === 'gog'
+            ? window.api.gogInstallInfo(installingGame.app_id, installingGame.platform || 'windows')
+            : window.api.epicInstallInfo(installingGame.app_id),
+        window.api.getDiskSpace(dir),
+    ]);
+
+    if (!sizeInfo) { el.textContent = 'Size info unavailable.'; return; }
+
+    const enough  = available === null || available >= sizeInfo.disk_size;
+    const dlPart  = `Download: <strong style="color:var(--text_main)">${fmtBytes(sizeInfo.download_size)}</strong>`;
+    const dkPart  = `On disk: <strong style="color:var(--text_main)">${fmtBytes(sizeInfo.disk_size)}</strong>`;
+    const avColor = enough ? '#66bb6a' : '#ef5350';
+    const avPart  = available !== null
+        ? `Available: <strong style="color:${avColor}">${fmtBytes(available)}</strong>`
+        : '';
+    const warn    = !enough ? `<span style="color:#ef5350; font-weight:900;">⚠ Not enough space</span>` : '';
+
+    el.innerHTML = [dlPart, dkPart, avPart, warn].filter(Boolean).join('<span style="color:var(--border_solid)"> · </span>');
+
+    if (btn && !enough) {
+        btn.disabled = true;
+        btn.title = 'Not enough disk space';
+    }
+}
+
 document.getElementById('btn-install-cancel-pre')?.addEventListener('click', closeInstallModal);
 document.getElementById('btn-install-done')?.addEventListener('click', () => { closeInstallModal(); loadGames(); });
 
 document.getElementById('btn-browse-install-dir')?.addEventListener('click', async () => {
     const dir = await window.api.selectDirectory();
-    if (dir) document.getElementById('install-dir-input').value = dir;
+    if (dir) { document.getElementById('install-dir-input').value = dir; fetchInstallSizes(); }
 });
 
 document.getElementById('btn-install-cancel-running')?.addEventListener('click', async () => {
