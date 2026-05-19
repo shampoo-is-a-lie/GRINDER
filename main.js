@@ -351,32 +351,52 @@ ipcMain.handle('legendary-login', event => {
             webPreferences: { nodeIntegration: false, contextIsolation: true },
         });
         authWin.setMenu(null);
-        authWin.loadURL(AUTH_URL);
+        // Force a fresh page load so we always get a new authorization code,
+        // not a cached one with an already-expired code.
+        authWin.loadURL(AUTH_URL, { extraHeaders: 'Cache-Control: no-cache\nPragma: no-cache\n' });
+
+        const send = d => { try { event.sender.send('legendary-login-progress', String(d)); } catch {} };
 
         async function tryExtract() {
             if (resolved) return;
             try {
                 const text = await authWin.webContents.executeJavaScript('document.body.innerText');
-                // Epic returns authorizationCode (current) or exchangeCode (older flow)
-                const m = text.match(/"authorizationCode"\s*:\s*"([^"]+)"/) ||
+
+                // Epic returns the code in multiple places — try all of them:
+                // 1. redirectUrl query param:  ...?code=<authCode>
+                // 2. authorizationCode field (current flow)
+                // 3. exchangeCode field (older flow)
+                const m = text.match(/"redirectUrl"\s*:\s*"[^"]*[?&]code=([^"&\\s]+)/) ||
+                          text.match(/"authorizationCode"\s*:\s*"([^"]+)"/) ||
                           text.match(/"exchangeCode"\s*:\s*"([^"]+)"/);
                 if (!m) return;
+
                 resolved = true;
                 authWin.close();
-                const send = d => { try { event.sender.send('legendary-login-progress', String(d)); } catch {} };
-                send('Got exchange code, authenticating with legendary...\n');
+                send(`Extracted auth code, running legendary auth...\n`);
+
                 const proc = spawn(leg, ['auth', '--code', m[1]], { stdio: ['ignore', 'pipe', 'pipe'] });
                 proc.stdout.on('data', send);
                 proc.stderr.on('data', send);
-                proc.on('close', code => resolve({ ok: code === 0 }));
+                proc.on('close', exitCode => {
+                    if (exitCode !== 0) {
+                        // Show legendary's log file so the user can see what went wrong
+                        try {
+                            const logPath = path.join(HOME, '.config', 'legendary', 'logs', 'legendary.log');
+                            const log = fs.readFileSync(logPath, 'utf8');
+                            const tail = log.split('\n').slice(-25).join('\n');
+                            send(`\n--- legendary log (last 25 lines) ---\n${tail}\n`);
+                        } catch { send('\n(Could not read legendary log)\n'); }
+                    }
+                    resolve({ ok: exitCode === 0 });
+                });
                 proc.on('error', e => resolve({ ok: false, error: e.message }));
             } catch {}
         }
 
-        authWin.webContents.on('did-finish-load',    tryExtract);
-        authWin.webContents.on('did-navigate',        tryExtract);
+        authWin.webContents.on('did-finish-load',     tryExtract);
+        authWin.webContents.on('did-navigate',         tryExtract);
         authWin.webContents.on('did-navigate-in-page', tryExtract);
-        // Extra poll — sometimes the page is already loaded before listeners attach
         setTimeout(tryExtract, 1500);
         authWin.on('closed', () => { if (!resolved) resolve({ ok: false, error: 'Window closed before login completed.' }); });
     });
