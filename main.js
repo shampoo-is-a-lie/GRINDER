@@ -402,7 +402,27 @@ ipcMain.handle('legendary-login', event => {
     });
 });
 
-// List installed Epic games
+// List all owned Epic games (installed or not via legendary)
+ipcMain.handle('legendary-list-owned', async () => {
+    const r = await runLegendary(['list', '--json']);
+    if (!r.ok && r.error) return { ok: false, error: r.error };
+    try {
+        const all = JSON.parse(r.stdout);
+        return {
+            ok: true,
+            games: all.map(g => ({
+                app_name:     g.app_name,
+                title:        g.app_title || g.metadata?.title || 'Unknown',
+                is_dlc:       false,
+                install_path: null,
+                executable:   null,
+                version:      null,
+            }))
+        };
+    } catch { return { ok: false, error: 'Failed to parse legendary output.' }; }
+});
+
+// List games that legendary itself has installed (subset of owned)
 ipcMain.handle('legendary-list-installed', async () => {
     const r = await runLegendary(['list-installed', '--json']);
     if (!r.ok && r.error) return { ok: false, error: r.error };
@@ -421,7 +441,8 @@ ipcMain.handle('legendary-import', (_, games) => {
     const tx = db.transaction(list => {
         let n = 0;
         for (const g of list) {
-            stmt.run('epic_' + g.app_name, g.title, g.app_name,
+            // installed=0 by default — will be updated when user installs via GRINDER
+        stmt.run('epic_' + g.app_name, g.title, g.app_name,
                      g.install_path || null, g.executable || null, g.version || null);
             n++;
         }

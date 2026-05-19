@@ -307,12 +307,12 @@ async function loadImportData() {
     accountEl.textContent    = `✓ ${status.account}`;
     setStatus('Fetching installed Epic games...');
 
-    const result = await window.api.legendaryListInstalled();
+    const result = await window.api.legendaryListOwned();
     if (!result.ok || !result.games.length) {
         gamesPanel.style.display = 'none';
         emptyPanel.style.display = 'block';
         confirmBtn.style.display = 'none';
-        setStatus(result.ok ? 'No installed Epic games found.' : `Error: ${result.error}`);
+        setStatus(result.ok ? 'No Epic games found in your library.' : `Error: ${result.error}`);
         return;
     }
 

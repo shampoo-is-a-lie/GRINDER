@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
     // Legendary / Epic
     legendaryStatus:       () => ipcRenderer.invoke('legendary-status'),
     legendaryLogin:        () => ipcRenderer.invoke('legendary-login'),
+    legendaryListOwned:    () => ipcRenderer.invoke('legendary-list-owned'),
     legendaryListInstalled:() => ipcRenderer.invoke('legendary-list-installed'),
     legendaryImport:       (games) => ipcRenderer.invoke('legendary-import', games),
     onLegendaryLoginProgress: (cb) => ipcRenderer.on('legendary-login-progress', (_, d) => cb(d)),
