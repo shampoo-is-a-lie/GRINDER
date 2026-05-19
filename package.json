@@ -7,7 +7,8 @@
     "postinstall": "electron-builder install-app-deps",
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --linux AppImage"
+    "dist": "electron-builder --linux AppImage",
+    "postdist": "D=/home/jose/Games/CNGM; F=GRINDER.AppImage; [ -f $D/$F ] && mv $D/$F $D/GRINDER_old.AppImage; cp dist/$F $D/$F && echo \"Deployed $F to $D\""
   },
   "author": "Shampoo is a Lie",
   "license": "GPL-3.0-or-later",

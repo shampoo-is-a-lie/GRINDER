@@ -14,12 +14,16 @@ contextBridge.exposeInMainWorld('api', {
     getGames:   ()       => ipcRenderer.invoke('get-games'),
     addGame:    (data)   => ipcRenderer.invoke('add-game', data),
     updateGame: (id, d)  => ipcRenderer.invoke('update-game', id, d),
-    deleteGame: (id)     => ipcRenderer.invoke('delete-game', id),
+    deleteGame:          (id)     => ipcRenderer.invoke('delete-game', id),
+    uninstallGameFiles:  (id)     => ipcRenderer.invoke('uninstall-game-files', id),
     launchGame: (id)     => ipcRenderer.invoke('launch-game', id),
 
     // Settings
     getSetting: (k)    => ipcRenderer.invoke('get-setting', k),
     setSetting: (k, v) => ipcRenderer.invoke('set-setting', k, v),
+
+    // Disk size
+    getDiskSize: (p) => ipcRenderer.invoke('get-disk-size', p),
 
     // Environment
     checkTools:   () => ipcRenderer.invoke('check-tools'),

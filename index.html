@@ -87,10 +87,12 @@
     #games-list::-webkit-scrollbar { width: 5px; }
     #games-list::-webkit-scrollbar-thumb { background: var(--border_solid); border-radius: 3px; }
 
-    .game-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    .game-row { display: flex; flex-direction: column; gap: 5px; padding: 10px 16px;
                 border-bottom: 1px solid rgba(139,90,43,0.2); transition: background 0.15s; cursor: default; }
     .game-row:hover { background: rgba(212,129,58,0.06); }
     .game-row.selected { background: rgba(212,129,58,0.12); border-left: 3px solid var(--accent); padding-left: 13px; }
+    .game-row-main { display: flex; align-items: center; gap: 12px; }
+    .game-row-sub  { display: flex; align-items: center; gap: 8px; padding-left: 2px; }
 
     .game-store-badge { font-size: 9px; font-weight: 900; letter-spacing: 1px; padding: 2px 7px;
                         border-radius: 3px; text-transform: uppercase; flex-shrink: 0; }
@@ -101,17 +103,20 @@
     .game-title { flex: 1; font-size: 13px; font-weight: 700; color: var(--text_main); }
     .game-status { font-size: 10px; font-weight: 700; flex-shrink: 0; }
     .status-installed   { color: #66bb6a; }
-    .status-uninstalled { color: #ef5350; }
+    .status-uninstalled { color: var(--text_dim); }
+    .game-size-badge { font-size: 9px; font-weight: 900; padding: 2px 9px; border-radius: 10px;
+                       background: rgba(139,90,43,0.12); color: var(--text_dim);
+                       border: 1px solid var(--border_solid); letter-spacing: 0.5px; flex-shrink: 0; }
 
     .game-actions { display: flex; gap: 6px; flex-shrink: 0; }
     .game-actions button { border: none; border-radius: 4px; padding: 4px 10px; font-family: 'Raleway', sans-serif;
                            font-size: 10px; font-weight: 900; cursor: pointer; letter-spacing: 0.5px; transition: 0.15s; }
-    .btn-launch  { background: var(--accent); color: var(--bg); }
-    .btn-launch:hover  { filter: brightness(1.15); }
-    .btn-edit    { background: transparent; color: var(--text_sec); border: 1px solid var(--border_solid) !important; }
-    .btn-edit:hover    { border-color: var(--accent) !important; color: var(--text_main); }
-    .btn-delete  { background: transparent; color: #ef5350; border: 1px solid rgba(239,83,80,0.3) !important; }
-    .btn-delete:hover  { background: rgba(239,83,80,0.1); }
+    .btn-launch    { background: var(--accent); color: var(--bg); }
+    .btn-launch:hover    { filter: brightness(1.15); }
+    .btn-edit      { background: transparent; color: var(--text_sec); border: 1px solid var(--border_solid) !important; }
+    .btn-edit:hover      { border-color: var(--accent) !important; color: var(--text_main); }
+    .btn-delete, .btn-uninstall { background: transparent; color: #ef5350; border: 1px solid rgba(239,83,80,0.3) !important; }
+    .btn-delete:hover, .btn-uninstall:hover { background: rgba(239,83,80,0.1); }
 
     #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text_dim); }
     #empty-state p { font-size: 13px; letter-spacing: 1px; }
@@ -382,5 +387,16 @@
   </div>
 
   <script src="renderer.js"></script>
+  <div id="modal-confirm" class="modal-overlay">
+    <div class="modal-box" style="max-width:420px;">
+      <h3 id="modal-confirm-title" style="margin:0 0 14px;"></h3>
+      <p id="modal-confirm-body" style="font-size:12px; color:var(--text_sec); line-height:1.7; margin:0 0 20px;"></p>
+      <div class="modal-actions">
+        <button id="modal-confirm-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
+        <button id="modal-confirm-ok" style="background:rgba(198,40,40,0.15); border:1px solid #c62828; color:#ef5350;">Uninstall</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

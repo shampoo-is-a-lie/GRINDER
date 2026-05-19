@@ -8,7 +8,7 @@ const Database = require('better-sqlite3');
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 const configDir = app.isPackaged
-    ? path.join(path.dirname(process.execPath), 'GRINDERConfig')
+    ? app.getPath('userData')          // ~/.config/GRINDER on Linux
     : path.join(__dirname, 'GRINDERConfig');
 
 const prefixesDir = path.join(configDir, 'prefixes');
@@ -115,6 +115,14 @@ function scanProtonVersions() {
     });
 }
 
+// Expand ~ to HOME so spawn() (which doesn't use a shell) gets real paths
+function expandTilde(p) {
+    if (!p) return p;
+    if (p === '~') return HOME;
+    if (p.startsWith('~/')) return path.join(HOME, p.slice(2));
+    return p;
+}
+
 // ── Bundled binary paths ──────────────────────────────────────────────────────
 // In packaged AppImage, extraResources land in process.resourcesPath/assets/bin/linux.
 // In dev, they live in __dirname/assets/bin/linux.
@@ -141,38 +149,55 @@ function findUmu() { return which('umu-run'); }
 // ── Launch engine ─────────────────────────────────────────────────────────────
 async function launchGame(gameId) {
     const game = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
-    if (!game)          throw new Error(`Game "${gameId}" not found in GRINDER database.`);
+    if (!game)           throw new Error(`Game "${gameId}" not found in GRINDER database.`);
     if (!game.installed) throw new Error(`"${game.title}" is not marked as installed.`);
 
-    const prefix  = game.prefix_path || path.join(prefixesDir, gameId);
-    const proton  = game.proton_path  || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value || '';
+    const prefix = expandTilde(game.prefix_path) || path.join(prefixesDir, gameId);
+    const proton = expandTilde(game.proton_path)
+        || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value
+        || '';
 
     fs.mkdirSync(prefix, { recursive: true });
 
-    // Epic: delegate to Legendary which handles EOS, cloud saves, etc.
+    // Resolve exe to an absolute path, expanding ~ in the stored install_path
+    const installPath = expandTilde(game.install_path || '');
+    const exe = installPath && game.executable ? path.join(installPath, game.executable) : '';
+
+    const umu = findUmu();
+
+    // Epic: try direct exe via umu-run first; fall back to legendary (handles EOS/cloud saves)
     if (game.store === 'epic') {
+        if (exe && fs.existsSync(exe) && umu) {
+            const env = {
+                ...process.env,
+                WINEPREFIX: prefix,
+                PROTONPATH:  proton,
+                GAMEID:      game.app_id || `grinder-${gameId}`,
+            };
+            spawn(umu, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+            return { ok: true, method: 'umu-run' };
+        }
         const legendary = findLegendary();
         if (legendary) {
             spawn(legendary, ['launch', game.app_id], { detached: true, stdio: 'ignore' }).unref();
             return { ok: true, method: 'legendary' };
         }
+        throw new Error('Cannot launch: exe not found, umu-run not available, and legendary not found.');
     }
 
-    // Validate executable
-    const exe = path.join(game.install_path || '', game.executable || '');
-    if (!game.executable || !fs.existsSync(exe)) {
+    // Non-Epic: validate exe
+    if (!exe || !fs.existsSync(exe)) {
         throw new Error(`Executable not found: ${exe || '(not set)'}`);
     }
 
     // Launch priority:
     // 1. umu-run (best compatibility — DXVK/VKD3D managed automatically)
-    // 2. Direct Proton invocation (works without umu, requires Proton path set)
+    // 2. Direct Proton invocation (requires Proton path set)
     // 3. Raw Wine (last resort)
-    const umu = findUmu();
     if (umu) {
         const env = {
             ...process.env,
-            WINEPREFIX:  prefix,
+            WINEPREFIX: prefix,
             PROTONPATH:  proton,
             GAMEID:      game.app_id || `grinder-${gameId}`,
         };
@@ -181,7 +206,6 @@ async function launchGame(gameId) {
     }
 
     if (proton) {
-        // Direct Proton: sets the env variables Proton's script expects
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const env = {
             ...process.env,
@@ -195,9 +219,8 @@ async function launchGame(gameId) {
         return { ok: true, method: 'proton-direct' };
     }
 
-    // Raw Wine fallback
     const wine = which('wine');
-    if (!wine) throw new Error('No launch method available: umu-run not found, no Proton path set, and wine is not installed.');
+    if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
     spawn(wine, [exe], { env: { ...process.env, WINEPREFIX: prefix }, detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
@@ -278,6 +301,29 @@ ipcMain.handle('update-game', (_, id, data) => {
 
 ipcMain.handle('delete-game', (_, id) => { db.prepare('DELETE FROM games WHERE id=?').run(id); return true; });
 
+ipcMain.handle('uninstall-game-files', async (_, id) => {
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(id);
+    if (!game) return { ok: false, error: 'Game not found.' };
+
+    const errors = [];
+
+    const installPath = expandTilde(game.install_path || '');
+    if (installPath && fs.existsSync(installPath)) {
+        try { fs.rmSync(installPath, { recursive: true, force: true }); }
+        catch (e) { errors.push(`Game files: ${e.message}`); }
+    }
+
+    const prefixPath = expandTilde(game.prefix_path) || path.join(prefixesDir, id);
+    if (fs.existsSync(prefixPath)) {
+        try { fs.rmSync(prefixPath, { recursive: true, force: true }); }
+        catch (e) { errors.push(`Prefix: ${e.message}`); }
+    }
+
+    db.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(id);
+
+    return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true };
+});
+
 ipcMain.handle('launch-game', async (_, gameId) => {
     try   { return await launchGame(gameId); }
     catch (e) { return { ok: false, error: e.message }; }
@@ -299,6 +345,17 @@ ipcMain.handle('check-tools', () => {
 });
 
 ipcMain.handle('open-path', (_, p) => shell.openPath(p));
+
+ipcMain.handle('get-disk-size', (_, dirPath) => {
+    const resolved = expandTilde(dirPath);
+    if (!resolved || !fs.existsSync(resolved)) return null;
+    return new Promise(resolve => {
+        const { exec } = require('child_process');
+        exec(`du -sh "${resolved}" 2>/dev/null`, { timeout: 15000 }, (err, stdout) => {
+            resolve(err ? null : stdout.split('\t')[0].trim());
+        });
+    });
+});
 ipcMain.handle('get-config-dir', () => configDir);
 
 // Proton
@@ -450,7 +507,7 @@ ipcMain.handle('legendary-install', (event, appName, installDir) => {
     const leg = findLegendary();
     if (!leg) return { ok: false, error: 'legendary not found.' };
 
-    const dir = installDir || path.join(HOME, 'Games');
+    const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
     try { fs.mkdirSync(dir, { recursive: true }); } catch {}
 
     const send = d => { try { event.sender.send('install-progress', String(d)); } catch {} };

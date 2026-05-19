@@ -92,16 +92,22 @@ function renderGames(games) {
 
     list.innerHTML = games.map(g => `
         <div class="game-row ${g.id === selectedId ? 'selected' : ''}" data-id="${g.id}">
-            ${storeBadge(g.store)}
-            <span class="game-title">${g.title}</span>
-            <span class="game-status ${g.installed ? 'status-installed' : 'status-uninstalled'}">
-                ${g.installed ? '● Installed' : '○ Not installed'}
-            </span>
-            <div class="game-actions">
-                ${g.installed  ? `<button class="btn-launch" data-launch="${g.id}">▶ Launch</button>` : ''}
-                ${!g.installed && g.store === 'epic' ? `<button class="btn-install-game" data-install="${g.id}" style="background:#0078f2;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
-                <button class="btn-edit" data-edit="${g.id}">Edit</button>
-                <button class="btn-delete" data-delete="${g.id}">✕</button>
+            <div class="game-row-main">
+                ${storeBadge(g.store)}
+                <span class="game-title">${g.title}</span>
+                <div class="game-actions">
+                    ${g.installed  ? `<button class="btn-launch" data-launch="${g.id}">▶ Launch</button>` : ''}
+                    ${!g.installed && g.store === 'epic' ? `<button class="btn-install-game" data-install="${g.id}" style="background:#0078f2;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
+                    <button class="btn-edit" data-edit="${g.id}">Edit</button>
+                    ${g.installed ? `<button class="btn-uninstall" data-uninstall="${g.id}">Uninstall</button>` : ''}
+                    <button class="btn-delete" data-delete="${g.id}">✕</button>
+                </div>
+            </div>
+            <div class="game-row-sub">
+                ${g.installed && g.install_path ? `<span data-size="${g.id}" class="game-size-badge">…</span>` : ''}
+                <span class="game-status ${g.installed ? 'status-installed' : 'status-uninstalled'}">
+                    ${g.installed ? '● Installed' : '○ Not installed'}
+                </span>
             </div>
         </div>
     `).join('');
@@ -119,10 +125,13 @@ function renderGames(games) {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const id = btn.dataset.launch;
-            setStatus(`Launching "${allGames.find(g=>g.id===id)?.title}"...`);
+            const title = allGames.find(g=>g.id===id)?.title || '';
+            setStatus(`Launching "${title}"...`);
+            btn.textContent = '⏳ Launching…';
             btn.disabled = true;
             const result = await window.api.launchGame(id);
             btn.disabled = false;
+            btn.textContent = '▶ Launch';
             setStatus(result.ok ? `Launched via ${result.method}.` : `Error: ${result.error}`);
         });
     });
@@ -149,9 +158,38 @@ function renderGames(games) {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const game = allGames.find(g => g.id === btn.dataset.delete);
-            if (!confirm(`Remove "${game?.title}" from GRINDER? (files are NOT deleted)`)) return;
+            const confirmed = await showConfirm(
+                `Remove ${game?.title}?`,
+                `This will remove <span style="color:var(--text_main)">${game?.title}</span> from GRINDER's library.<br><br>
+                 <span style="color:#66bb6a; font-size:11px;">Game files on disk are NOT deleted.</span>`
+            );
+            if (!confirmed) return;
             await window.api.deleteGame(game.id);
             if (selectedId === game.id) selectedId = null;
+            await loadGames();
+        });
+    });
+
+    // Uninstall buttons
+    list.querySelectorAll('[data-uninstall]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const game = allGames.find(g => g.id === btn.dataset.uninstall);
+            if (!game) return;
+            const confirmed = await showConfirm(
+                `Uninstall ${game.title}?`,
+                `This will permanently delete:<br><br>
+                 <span style="color:var(--text_main)">● Game files</span><br>
+                 <span style="color:var(--text_dim); font-size:11px;">${game.install_path || '(unknown path)'}</span><br><br>
+                 <span style="color:var(--text_main)">● Wine prefix</span><br>
+                 <span style="color:var(--text_dim); font-size:11px;">All save data and settings for this game</span><br><br>
+                 <span style="color:#ef5350; font-size:11px; font-weight:900;">This cannot be undone.</span>`
+            );
+            if (!confirmed) return;
+            btn.textContent = 'Removing…';
+            btn.disabled = true;
+            const result = await window.api.uninstallGameFiles(game.id);
+            setStatus(result.ok ? `"${game.title}" uninstalled.` : `Error: ${result.error}`);
             await loadGames();
         });
     });
@@ -169,6 +207,17 @@ function filterGames() {
 async function loadGames() {
     allGames = await window.api.getGames();
     renderGames(filterGames());
+    loadGameSizes();
+}
+
+async function loadGameSizes() {
+    const installed = allGames.filter(g => g.installed && g.install_path);
+    for (const g of installed) {
+        const el = document.querySelector(`[data-size="${g.id}"]`);
+        if (!el) continue;
+        const size = await window.api.getDiskSize(g.install_path);
+        el.textContent = size || '';
+    }
 }
 
 document.getElementById('search-input').addEventListener('input', () => renderGames(filterGames()));
@@ -244,7 +293,7 @@ function openInstallModal(game) {
 
     // Pre-fill install dir from settings
     window.api.getSetting('default_install_dir').then(d => {
-        document.getElementById('install-dir-input').value = d || (window.homeDir || '~/Games');
+        document.getElementById('install-dir-input').value = d || '~/Games/CafeNeurotico';
     });
 
     modalInstall.classList.add('active');
@@ -607,6 +656,26 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     await window.api.setSetting('default_prefix_dir',  document.getElementById('s-prefix-dir').value.trim());
     setStatus('Settings saved.');
 });
+
+// ── Confirm modal ─────────────────────────────────────────────────────────────
+function showConfirm(title, bodyHtml) {
+    return new Promise(resolve => {
+        const modal  = document.getElementById('modal-confirm');
+        const okBtn  = document.getElementById('modal-confirm-ok');
+        const canBtn = document.getElementById('modal-confirm-cancel');
+        document.getElementById('modal-confirm-title').textContent = title;
+        document.getElementById('modal-confirm-body').innerHTML    = bodyHtml;
+        modal.classList.add('active');
+        const done = (result) => {
+            modal.classList.remove('active');
+            okBtn.onclick = canBtn.onclick = modal.onclick = null;
+            resolve(result);
+        };
+        okBtn.onclick  = () => done(true);
+        canBtn.onclick = () => done(false);
+        modal.onclick  = (e) => { if (e.target === modal) done(false); };
+    });
+}
 
 // ── Status bar ────────────────────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('status-msg').textContent = msg; }

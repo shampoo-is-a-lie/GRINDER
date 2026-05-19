@@ -1,18 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="18" fill="#1a0f0a"/>
-  <!-- Grinder body -->
-  <rect x="28" y="38" width="44" height="42" rx="6" fill="#432818"/>
-  <rect x="32" y="42" width="36" height="34" rx="4" fill="#261510"/>
-  <!-- Hopper (top funnel) -->
-  <polygon points="22,20 78,20 68,38 32,38" fill="#6b3a1f"/>
-  <polygon points="26,14 74,14 78,20 22,20" fill="#8B4513"/>
-  <!-- Grind slots -->
-  <rect x="36" y="50" width="28" height="4" rx="2" fill="#D4813a" opacity="0.8"/>
-  <rect x="36" y="59" width="28" height="4" rx="2" fill="#D4813a" opacity="0.6"/>
-  <rect x="36" y="68" width="28" height="4" rx="2" fill="#D4813a" opacity="0.4"/>
-  <!-- Handle -->
-  <rect x="72" y="52" width="12" height="4" rx="2" fill="#8B5A2B"/>
-  <circle cx="84" cy="54" r="4" fill="#D4813a"/>
-  <!-- Spout -->
-  <rect x="40" y="80" width="20" height="8" rx="3" fill="#6b3a1f"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#2C1E16"/>
+  
+  <circle cx="256" cy="64" r="8" fill="#FFE6A7"/>
+  <circle cx="256" cy="92" r="8" fill="#FFE6A7"/>
+
+  <path d="M 136 124 L 376 124 L 326 210 L 186 210 Z" fill="#432818" stroke="#D4A373" stroke-width="16" stroke-linejoin="round"/>
+  
+  <rect x="166" y="210" width="180" height="180" rx="32" fill="#432818" stroke="#D4A373" stroke-width="16"/>
+
+  <path d="M 216 260 H 296" fill="none" stroke="#FFE6A7" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 216 300 H 296" fill="none" stroke="#FFE6A7" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 216 340 H 296" fill="none" stroke="#FFE6A7" stroke-width="12" stroke-linecap="round"/>
+
+  <path d="M 206 390 V 430 C 206 441 215 450 226 450 H 286 C 297 450 306 441 306 430 V 390" fill="#432818" stroke="#D4A373" stroke-width="16" stroke-linejoin="round"/>
+
+  <path d="M 346 270 H 420" fill="none" stroke="#D4A373" stroke-width="16" stroke-linecap="round"/>
+  
+  <circle cx="346" cy="270" r="6" fill="#FFE6A7"/>
+
+  <circle cx="436" cy="270" r="16" fill="#FFE6A7"/>
+
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="none" stroke="#8B5A2B" stroke-width="12"/>
 </svg>
