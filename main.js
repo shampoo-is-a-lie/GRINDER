@@ -876,6 +876,11 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
     // Ensure the binary is executable
     try { fs.chmodSync(gogdl, '755'); } catch {}
 
+    // Delete the cached manifest for this game so gogdl always does a fresh
+    // file comparison rather than saying "Nothing to do" on reinstalls.
+    const manifestPath = path.join(configDir, 'gogdl', 'manifests', appId);
+    try { fs.rmSync(manifestPath, { force: true }); } catch {}
+
     const authPath = writeGogAuthConfig();
     const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
 
