@@ -403,7 +403,7 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
         document.getElementById('install-done-panel').style.display = 'flex';
         setStatus(`${installingGame.title} installed successfully.`);
     } else {
-        document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? 'error'}).\n`;
+        document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? result.error ?? 'error'}).\n`;
         document.getElementById('install-progress-panel').style.display = 'flex';
         document.getElementById('btn-install-cancel-running').textContent = 'Close';
         document.getElementById('btn-install-cancel-running').style.borderColor = 'var(--border_solid)';

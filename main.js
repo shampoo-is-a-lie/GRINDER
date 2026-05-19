@@ -785,10 +785,14 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
     const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
     try { fs.mkdirSync(dir, { recursive: true }); } catch {}
 
+    // Ensure the binary is executable
+    try { fs.chmodSync(gogdl, '755'); } catch {}
+
     const authPath = writeGogAuthConfig();
     const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
 
     return new Promise(resolve => {
+        send(`Running: ${gogdl} download ${appId} --platform ${platform} --path ${dir}\n`);
         activeGogInstallProc = spawn(gogdl, [
             'download', appId,
             '--platform',         platform,
@@ -804,7 +808,11 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
             try { fs.unlinkSync(authPath); } catch {}
             resolve({ ok: code === 0, exitCode: code, install_dir: dir });
         });
-        activeGogInstallProc.on('error', e => { activeGogInstallProc = null; resolve({ ok: false, error: e.message }); });
+        activeGogInstallProc.on('error', e => {
+            activeGogInstallProc = null;
+            send(`\nSpawn error: ${e.message}\n`);
+            resolve({ ok: false, error: e.message });
+        });
     });
 });
 
