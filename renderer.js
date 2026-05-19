@@ -272,12 +272,13 @@ async function loadGames() {
 
 async function loadGameSizes() {
     const installed = allGames.filter(g => g.installed && g.install_path);
-    for (const g of installed) {
-        const el = document.querySelector(`[data-size="${g.id}"]`);
-        if (!el) continue;
+    // Run all du calls in parallel, then re-query the element AFTER the result
+    // arrives — avoids stale references if a re-render happened during the wait.
+    await Promise.all(installed.map(async g => {
         const size = await window.api.getDiskSize(g.install_path);
-        el.textContent = size || '';
-    }
+        const el = document.querySelector(`[data-size="${g.id}"]`);
+        if (el) el.textContent = size || '';
+    }));
 }
 
 document.getElementById('search-input').addEventListener('input', () => renderGames(filterGames()));
