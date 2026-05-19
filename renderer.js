@@ -394,9 +394,10 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
 
     if (result.ok) {
         if (installingGame.store === 'gog') {
-            // GOG: install_dir is the base dir; game lands in a subfolder named by game ID
+            const gi = result.gameInfo;
             await window.api.updateGame(installingGame.id, {
-                install_path: result.install_dir || dir,
+                install_path: gi?.install_path || result.install_dir || dir,
+                executable:   gi?.executable   || null,
                 installed:    1,
             });
         } else {

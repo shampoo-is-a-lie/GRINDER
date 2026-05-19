@@ -826,6 +826,26 @@ ipcMain.handle('gog-import', (_, games) => {
     catch (e) { return { ok: false, error: e.message }; }
 });
 
+// After gogdl installs, find the actual game subfolder and primary exe
+// by reading the goggame-<id>.info file gogdl writes into the game dir.
+function findGogInstallResult(baseDir, appId) {
+    try {
+        const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const gameDir  = path.join(baseDir, entry.name);
+            const infoFile = path.join(gameDir, `goggame-${appId}.info`);
+            if (!fs.existsSync(infoFile)) continue;
+            try {
+                const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+                const task = (info.playTasks || []).find(t => t.isPrimary && t.type === 'FileTask');
+                return { install_path: gameDir, executable: task?.path || null };
+            } catch { return { install_path: gameDir, executable: null }; }
+        }
+    } catch {}
+    return null;
+}
+
 let activeGogInstallProc = null;
 
 ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
@@ -857,7 +877,8 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
         activeGogInstallProc.on('close', code => {
             activeGogInstallProc = null;
             try { fs.unlinkSync(authPath); } catch {}
-            resolve({ ok: code === 0, exitCode: code, install_dir: dir });
+            const gameInfo = code === 0 ? findGogInstallResult(dir, appId) : null;
+            resolve({ ok: code === 0, exitCode: code, install_dir: dir, gameInfo });
         });
         activeGogInstallProc.on('error', e => {
             activeGogInstallProc = null;
