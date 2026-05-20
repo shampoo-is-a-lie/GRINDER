@@ -1312,20 +1312,61 @@ ipcMain.handle('gog-sync-platforms', (_, games) => {
 });
 
 // After gogdl installs, find the actual game subfolder and primary exe
-// by reading the goggame-<id>.info file gogdl writes into the game dir.
+// Detect a successful GOG install by reading the metadata gogdl leaves behind.
+// Windows games: goggame-<id>.info  →  play tasks include the primary executable.
+// Linux native:  .gogdl-linux-manifest  →  no .info file; scan dir for launcher.
 function findGogInstallResult(baseDir, appId) {
     try {
         const entries = fs.readdirSync(baseDir, { withFileTypes: true });
         for (const entry of entries) {
             if (!entry.isDirectory()) continue;
-            const gameDir  = path.join(baseDir, entry.name);
+            const gameDir = path.join(baseDir, entry.name);
+
+            // ── Windows path ──────────────────────────────────────────────────
             const infoFile = path.join(gameDir, `goggame-${appId}.info`);
-            if (!fs.existsSync(infoFile)) continue;
-            try {
-                const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
-                const task = (info.playTasks || []).find(t => t.isPrimary && t.type === 'FileTask');
-                return { install_path: gameDir, executable: task?.path || null };
-            } catch { return { install_path: gameDir, executable: null }; }
+            if (fs.existsSync(infoFile)) {
+                try {
+                    const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+                    const task = (info.playTasks || []).find(t => t.isPrimary && t.type === 'FileTask');
+                    return { install_path: gameDir, executable: task?.path || null };
+                } catch { return { install_path: gameDir, executable: null }; }
+            }
+
+            // ── Linux native path ─────────────────────────────────────────────
+            // gogdl writes .gogdl-linux-manifest after a successful Linux install.
+            // No .info file is created; find the main launcher instead.
+            const linuxManifest = path.join(gameDir, '.gogdl-linux-manifest');
+            if (fs.existsSync(linuxManifest)) {
+                const exe = findLinuxGameExe(gameDir);
+                return { install_path: gameDir, executable: exe };
+            }
+        }
+    } catch {}
+    return null;
+}
+
+// Heuristic: find the primary executable in a Linux GOG game directory.
+// Prefers .sh launchers, then executable binaries matching the folder name,
+// then any executable binary at the root.
+function findLinuxGameExe(gameDir) {
+    const folderName = path.basename(gameDir).toLowerCase();
+    try {
+        const entries = fs.readdirSync(gameDir);
+        // 1. .sh launcher at root
+        const sh = entries.find(e => e.toLowerCase().endsWith('.sh') && !e.toLowerCase().startsWith('uninstall'));
+        if (sh) return sh;
+        // 2. Executable binary matching the folder name
+        for (const e of entries) {
+            if (e.toLowerCase() === folderName || e.toLowerCase() === folderName.replace(/ /g, '_')) {
+                const full = path.join(gameDir, e);
+                try { if (fs.statSync(full).mode & 0o111) return e; } catch {}
+            }
+        }
+        // 3. Any executable binary (no extension) at root
+        for (const e of entries) {
+            if (e.includes('.')) continue;
+            const full = path.join(gameDir, e);
+            try { if (fs.statSync(full).isFile() && (fs.statSync(full).mode & 0o111)) return e; } catch {}
         }
     } catch {}
     return null;
