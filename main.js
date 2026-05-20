@@ -60,31 +60,45 @@ async function headlessInstall(store, appId, platform, installDir) {
         await getGogToken().catch(() => {});
         const authPath = writeGogAuthConfig();
 
-        writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Starting download...' });
+        const runGogdlDownload = async (plat) => {
+            let lastLines = [];
+            const ok = await new Promise(resolve => {
+                const proc = spawn(gogdl, [
+                    '--auth-config-path', authPath, 'download', appId,
+                    '--platform', plat, '--path', dir, '--lang', 'en-US',
+                ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GOGDL_CONFIG_PATH: configDir } });
+                let buf = '';
+                const onData = d => {
+                    buf += String(d);
+                    const lines = buf.split('\n'); buf = lines.pop();
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (trimmed) { lastLines.push(trimmed); if (lastLines.length > 5) lastLines.shift(); }
+                        const pct = line.match(/(\d+(?:\.\d+)?)\s*%/)?.[1];
+                        const sz  = line.match(/([\d.]+\s*(?:GiB|MiB|GB|MB))\s*\/\s*([\d.]+\s*(?:GiB|MiB|GB|MB))/i);
+                        if (pct || sz) writeProgress({ ...base, step: 'downloading', percent: pct ? parseFloat(pct) : 0, message: `[${plat}] ${sz ? `${sz[1]} / ${sz[2]}` : `${pct || 0}%`}` });
+                    }
+                };
+                proc.stdout.on('data', onData); proc.stderr.on('data', onData);
+                proc.on('close', code => resolve(code === 0)); proc.on('error', () => resolve(false));
+            });
+            return { ok, lastLines };
+        };
 
-        let lastLines = [];
-        const dlOk = await new Promise(resolve => {
-            const proc = spawn(gogdl, [
-                '--auth-config-path', authPath, 'download', appId,
-                '--platform', platform || 'windows', '--path', dir, '--lang', 'en-US',
-            ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GOGDL_CONFIG_PATH: configDir } });
-            let buf = '';
-            const onData = d => {
-                buf += String(d);
-                const lines = buf.split('\n'); buf = lines.pop();
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (trimmed) { lastLines.push(trimmed); if (lastLines.length > 5) lastLines.shift(); }
-                    const pct = line.match(/(\d+(?:\.\d+)?)\s*%/)?.[1];
-                    const sz  = line.match(/([\d.]+\s*(?:GiB|MiB|GB|MB))\s*\/\s*([\d.]+\s*(?:GiB|MiB|GB|MB))/i);
-                    if (pct || sz) writeProgress({ ...base, step: 'downloading', percent: pct ? parseFloat(pct) : 0, message: sz ? `${sz[1]} / ${sz[2]}` : `${pct || 0}%` });
-                }
-            };
-            proc.stdout.on('data', onData); proc.stderr.on('data', onData);
-            proc.on('close', code => resolve(code === 0)); proc.on('error', () => resolve(false));
-        });
+        let activePlat = platform || 'windows';
+        writeProgress({ ...base, step: 'downloading', percent: 0, message: `Starting download (${activePlat})...` });
+        let { ok: dlOk, lastLines } = await runGogdlDownload(activePlat);
+
+        // Auto-retry with linux if windows platform isn't supported by gogdl's content system API
+        if (!dlOk && activePlat === 'windows' && lastLines.some(l => /doesn.t support content system/i.test(l))) {
+            activePlat = 'linux';
+            writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Windows not available — retrying with Linux build...' });
+            ({ ok: dlOk, lastLines } = await runGogdlDownload(activePlat));
+        }
+
         try { fs.unlinkSync(authPath); } catch {}
         if (!dlOk) { writeProgress({ ...base, step: 'error', message: lastLines.slice(-2).join(' | ') || 'Download failed.', done: true }); return; }
+        platform = activePlat;
 
         const gameInfo = findGogInstallResult(dir, appId);
         if (!gameInfo) { writeProgress({ ...base, step: 'error', message: 'Install verification failed.', done: true }); return; }
