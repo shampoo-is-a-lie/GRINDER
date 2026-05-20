@@ -54,9 +54,15 @@ async function headlessInstall(store, appId, platform, installDir) {
         try { fs.chmodSync(gogdl, '755'); } catch {}
         const manifestPath = path.join(configDir, 'gogdl', 'manifests', appId);
         try { fs.rmSync(manifestPath, { force: true }); } catch {}
+
+        // Refresh GOG token before writing auth config — avoids stale-token failures in headless mode
+        writeProgress({ ...base, step: 'auth', percent: 0, message: 'Refreshing authentication...' });
+        await getGogToken().catch(() => {});
         const authPath = writeGogAuthConfig();
+
         writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Starting download...' });
 
+        let lastLines = [];
         const dlOk = await new Promise(resolve => {
             const proc = spawn(gogdl, [
                 '--auth-config-path', authPath, 'download', appId,
@@ -67,6 +73,8 @@ async function headlessInstall(store, appId, platform, installDir) {
                 buf += String(d);
                 const lines = buf.split('\n'); buf = lines.pop();
                 for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed) { lastLines.push(trimmed); if (lastLines.length > 5) lastLines.shift(); }
                     const pct = line.match(/(\d+(?:\.\d+)?)\s*%/)?.[1];
                     const sz  = line.match(/([\d.]+\s*(?:GiB|MiB|GB|MB))\s*\/\s*([\d.]+\s*(?:GiB|MiB|GB|MB))/i);
                     if (pct || sz) writeProgress({ ...base, step: 'downloading', percent: pct ? parseFloat(pct) : 0, message: sz ? `${sz[1]} / ${sz[2]}` : `${pct || 0}%` });
@@ -76,7 +84,7 @@ async function headlessInstall(store, appId, platform, installDir) {
             proc.on('close', code => resolve(code === 0)); proc.on('error', () => resolve(false));
         });
         try { fs.unlinkSync(authPath); } catch {}
-        if (!dlOk) { writeProgress({ ...base, step: 'error', message: 'Download failed.', done: true }); return; }
+        if (!dlOk) { writeProgress({ ...base, step: 'error', message: lastLines.slice(-2).join(' | ') || 'Download failed.', done: true }); return; }
 
         const gameInfo = findGogInstallResult(dir, appId);
         if (!gameInfo) { writeProgress({ ...base, step: 'error', message: 'Install verification failed.', done: true }); return; }
