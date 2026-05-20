@@ -14,17 +14,19 @@ const configDir = app.isPackaged
 const prefixesDir = path.join(configDir, 'prefixes');
 const dbPath      = path.join(configDir, 'grinder.db');
 
+
 let db;
 let win;
 
 // ── CLI mode detection ────────────────────────────────────────────────────────
-// Called as: GRINDER.AppImage launch <game_id>
-const allArgs    = process.argv;
-const launchIdx  = allArgs.indexOf('launch');
-const cliGameId  = launchIdx !== -1 ? allArgs[launchIdx + 1] : null;
-const cliMode    = !!cliGameId;
-const searchIdx  = allArgs.indexOf('search');
-const cliSearch  = searchIdx !== -1 ? allArgs.slice(searchIdx + 1).join(' ') : null;
+const allArgs     = process.argv;
+const launchIdx   = allArgs.indexOf('launch');
+const cliGameId   = launchIdx  !== -1 ? allArgs[launchIdx  + 1] : null;
+const cliMode     = !!cliGameId;   // headless: launch game and quit
+const searchIdx   = allArgs.indexOf('search');
+const cliSearch   = searchIdx  !== -1 ? allArgs.slice(searchIdx + 1).join(' ') : null;
+const setupIdx    = allArgs.indexOf('setup');
+const cliSetupId  = setupIdx   !== -1 ? allArgs[setupIdx   + 1] : null;
 
 // ── Database ──────────────────────────────────────────────────────────────────
 function initDb() {
@@ -59,6 +61,12 @@ function initDb() {
     try { db.prepare("ALTER TABLE games ADD COLUMN platforms TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN custom_env TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN winetricks TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN use_esync INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN use_fsync INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN use_dxvk_nvapi INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN use_battleye INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN use_eac INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN launch_target TEXT").run(); } catch(e) {}
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -161,6 +169,50 @@ function findGogdl() {
 // umu-run cannot be bundled (Python module); detect system install only
 function findUmu() { return which('umu-run'); }
 
+// Locate BattlEye or EAC runtime: GRINDER's own copy first, then common Steam locations
+function findRuntime(name) {
+    const steamName = name === 'battleye_runtime' ? 'Battleye AntiCheat' : 'EasyAntiCheat';
+    return [
+        path.join(configDir, 'runtimes', name),
+        path.join(HOME, '.steam', 'root', 'steamapps', 'common', steamName),
+        path.join(HOME, '.local', 'share', 'Steam', 'steamapps', 'common', steamName),
+        path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam', 'steamapps', 'common', steamName),
+    ].find(p => fs.existsSync(p)) || null;
+}
+
+// ── Steam library helpers (used by Steam import) ──────────────────────────────
+
+function getSteamLibraryPaths() {
+    const roots = [
+        path.join(HOME, '.local', 'share', 'Steam'),
+        path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam'),
+        path.join(HOME, '.steam', 'steam'),
+    ];
+    const dirs = new Set();
+    for (const root of roots) {
+        const sa = path.join(root, 'steamapps');
+        if (!fs.existsSync(sa)) continue;
+        dirs.add(sa);
+        try {
+            const vdf = path.join(sa, 'libraryfolders.vdf');
+            const content = fs.readFileSync(vdf, 'utf8');
+            for (const m of content.matchAll(/"path"\s+"([^"]+)"/g)) {
+                const extra = path.join(m[1], 'steamapps');
+                if (fs.existsSync(extra)) dirs.add(extra);
+            }
+        } catch {}
+    }
+    return [...dirs];
+}
+
+// Parse a VDF/ACF file into a flat key→value map (top-level keys only)
+function parseAcf(content) {
+    const result = {};
+    for (const m of content.matchAll(/"([^"]+)"\s+"([^"]+)"/g)) result[m[1]] = m[2];
+    return result;
+}
+
+
 // ── Launch engine ─────────────────────────────────────────────────────────────
 async function launchGame(gameId) {
     const game = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
@@ -186,19 +238,45 @@ async function launchGame(gameId) {
 
     fs.mkdirSync(prefix, { recursive: true });
 
-    // Resolve exe to an absolute path, expanding ~ in the stored install_path
     const installPath = expandTilde(game.install_path || '');
-    const exe = installPath && game.executable ? path.join(installPath, game.executable) : '';
+    // launch_target overrides the stored executable (e.g. alternate exe from playTasks)
+    const resolvedExe = (() => {
+        if (!installPath) return '';
+        const rel = game.launch_target || game.executable;
+        return rel ? path.join(installPath, ...rel.replace(/\\/g, '/').split('/')) : '';
+    })();
 
     const umu = findUmu();
+    const usingProton = !!(proton || umu);
 
-    // Epic: try direct exe via umu-run first; fall back to legendary (handles EOS/cloud saves)
-    // Base env: system → custom user vars → GRINDER's required vars (highest priority)
-    const baseEnv = (extra = {}) => ({ ...process.env, ...customEnv, ...extra });
+    // Compat env vars — mirrors Heroic's launcher.ts logic exactly
+    const compatEnv = {};
+    if (usingProton) {
+        if (!game.use_esync)     compatEnv.PROTON_NO_ESYNC = '1';
+        if (!game.use_fsync)     compatEnv.PROTON_NO_FSYNC = '1';
+        if (game.use_dxvk_nvapi) { compatEnv.PROTON_ENABLE_NVAPI = '1'; compatEnv.DXVK_NVAPI_ALLOW_OTHER_DRIVERS = '1'; }
+    } else {
+        if (game.use_esync !== 0) compatEnv.WINEESYNC = '1';
+        if (game.use_fsync !== 0) compatEnv.WINEFSYNC = '1';
+        if (game.use_dxvk_nvapi) { compatEnv.DXVK_ENABLE_NVAPI = '1'; compatEnv.DXVK_NVAPI_ALLOW_OTHER_DRIVERS = '1'; }
+    }
+    if (game.use_battleye) { const p = findRuntime('battleye_runtime'); if (p) compatEnv.PROTON_BATTLEYE_RUNTIME = p; }
+    if (game.use_eac)      { const p = findRuntime('eac_runtime');       if (p) compatEnv.PROTON_EAC_RUNTIME      = p; }
+
+    // Base env: system → custom user vars → compat flags → GRINDER's required vars (highest priority)
+    const baseEnv = (extra = {}) => ({ ...process.env, ...customEnv, ...compatEnv, ...extra });
+
+    // Steam games: launch via Steam client
+    if (game.store === 'steam') {
+        const appId = game.app_id;
+        if (!appId) throw new Error('No Steam App ID set for this game.');
+        spawn(`steam "steam://rungameid/${appId}"`, [], { shell: true, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'steam-client' };
+    }
 
     if (game.store === 'epic') {
-        if (exe && fs.existsSync(exe) && umu) {
-            spawn(umu, [exe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
+            spawn(umu, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
             return { ok: true, method: 'umu-run' };
         }
         const legendary = findLegendary();
@@ -209,16 +287,16 @@ async function launchGame(gameId) {
         throw new Error('Cannot launch: exe not found, umu-run not available, and legendary not found.');
     }
 
-    if (!exe || !fs.existsSync(exe)) throw new Error(`Executable not found: ${exe || '(not set)'}`);
+    if (!resolvedExe || !fs.existsSync(resolvedExe)) throw new Error(`Executable not found: ${resolvedExe || '(not set)'}`);
 
     if (game.platform === 'linux') {
-        try { fs.chmodSync(exe, '755'); } catch {}
-        spawn(exe, [], { env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
+        try { fs.chmodSync(resolvedExe, '755'); } catch {}
+        spawn(resolvedExe, [], { env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'native' };
     }
 
     if (umu) {
-        spawn(umu, [exe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        spawn(umu, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'umu-run' };
     }
 
@@ -226,13 +304,13 @@ async function launchGame(gameId) {
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const protonBin = path.join(proton, 'proton');
         if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
-        spawn(protonBin, ['run', exe], { env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
+        spawn(protonBin, ['run', resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'proton-direct' };
     }
 
     const wine = which('wine');
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
-    spawn(wine, [exe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
+    spawn(wine, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
 
@@ -255,7 +333,8 @@ function createWindow() {
 
     const showWin = () => {
         if (!win.isVisible()) win.show();
-        if (cliSearch) win.webContents.send('cli-search', cliSearch);
+        if (cliSearch)  win.webContents.send('cli-search', cliSearch);
+        if (cliSetupId) win.webContents.send('cli-setup',  cliSetupId);
     };
     ipcMain.once('renderer-ready', showWin);
     win.once('ready-to-show', () => setTimeout(showWin, 2000));
@@ -272,11 +351,25 @@ if (cliMode) {
             .catch(e => { console.error('GRINDER error:', e.message); app.quit(); });
     });
 } else {
-    app.whenReady().then(() => {
-        initDb();
-        createWindow();
-    });
-    app.on('window-all-closed', () => app.quit());
+    // Single-instance lock for windowed mode — second instance focuses existing window
+    const gotLock = app.requestSingleInstanceLock();
+    if (!gotLock) {
+        app.quit();
+    } else {
+        app.on('second-instance', (_, argv) => {
+            if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+            const args = argv.slice(2);
+            const si = args.indexOf('search');
+            if (si !== -1 && args[si + 1]) win?.webContents.send('cli-search', args.slice(si + 1).join(' '));
+            const pi = args.indexOf('setup');
+            if (pi !== -1 && args[pi + 1]) win?.webContents.send('cli-setup', args[pi + 1]);
+        });
+        app.whenReady().then(() => {
+            initDb();
+            createWindow();
+        });
+        app.on('window-all-closed', () => app.quit());
+    }
 }
 
 // ── IPC handlers ──────────────────────────────────────────────────────────────
@@ -304,7 +397,7 @@ ipcMain.handle('add-game', (_, data) => {
 });
 
 ipcMain.handle('update-game', (_, id, data) => {
-    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks'];
+    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks','use_esync','use_fsync','use_dxvk_nvapi','use_battleye','use_eac','launch_target'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
     if (!entries.length) return false;
     const set = entries.map(([k]) => `${k}=?`).join(', ');
@@ -774,6 +867,54 @@ ipcMain.handle('legendary-import', (_, games) => {
     catch (e) { return { ok: false, error: e.message }; }
 });
 
+// ── Steam library import ──────────────────────────────────────────────────────
+
+ipcMain.handle('steam-list-installed', () => {
+    const games = [];
+    const seen  = new Set();
+    for (const steamAppsDir of getSteamLibraryPaths()) {
+        let entries;
+        try { entries = fs.readdirSync(steamAppsDir); } catch { continue; }
+        for (const filename of entries) {
+            if (!filename.startsWith('appmanifest_') || !filename.endsWith('.acf')) continue;
+            try {
+                const data       = parseAcf(fs.readFileSync(path.join(steamAppsDir, filename), 'utf8'));
+                const appId      = data.appid;
+                const name       = data.name;
+                const installDir = data.installdir;
+                if (!appId || !name || seen.has(appId)) continue;
+                // Skip pure tools / SDKs (appids known to be non-games or Steamworks redistributables)
+                if (/^(Steam|Steamworks|Direct3D|Proton|SteamVR|Steam Linux Runtime|steam_)?$/i.test(name)) continue;
+                seen.add(appId);
+                const gameDir    = path.join(steamAppsDir, 'common', installDir);
+                const protonPfx  = path.join(steamAppsDir, 'compatdata', appId, 'pfx');
+                const isProton   = fs.existsSync(protonPfx);
+                const platform   = isProton ? 'windows' : 'linux';
+                games.push({ appId, name, installDir, gameDir, platform, steamAppsDir });
+            } catch {}
+        }
+    }
+    games.sort((a, b) => a.name.localeCompare(b.name));
+    return { games };
+});
+
+ipcMain.handle('steam-import', (_, games) => {
+    const stmt = db.prepare(`
+        INSERT OR IGNORE INTO games (id, title, store, app_id, install_path, installed, platform)
+        VALUES (?, ?, 'steam', ?, ?, 1, ?)
+    `);
+    const tx = db.transaction(list => {
+        let n = 0;
+        for (const g of list) {
+            stmt.run('steam_' + g.appId, g.name, g.appId, g.gameDir, g.platform);
+            n++;
+        }
+        return n;
+    });
+    try { return { ok: true, count: tx(games) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+});
+
 // Returns the computed Wine prefix path for a game (same logic as launchGame)
 ipcMain.handle('get-game-prefix', (_, gameId) => {
     const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
@@ -812,17 +953,16 @@ ipcMain.handle('run-winetricks', (event, prefixPath, tricks) => {
     });
 });
 
-// GOG compatibility files: download via gogdl redist, then install via umu-run/Proton
-ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPath, prefixPath, protonPath) => {
+// Standalone redist function — called by both the IPC handler and auto-install after gogdl-install
+async function runRedist(sender, channel, appId, platform, prefixPath, protonPath) {
     const gogdl = findGogdl();
     if (!gogdl) return { ok: false, error: 'gogdl not found.' };
     try { fs.chmodSync(gogdl, '755'); } catch {}
-    const sendLine = d => { try { event.sender.send('redist-progress', { line: String(d) }); } catch {} };
-    const sendDone = (ok, msg) => { try { event.sender.send('redist-progress', { done: true, ok, msg }); } catch {} };
+    const sendLine = d => { try { sender.send(channel, { line: String(d) }); } catch {} };
+    const sendDone = (ok, msg) => { try { sender.send(channel, { done: true, ok, msg }); } catch {} };
     const send = sendLine;
     const authPath = writeGogAuthConfig();
 
-    // Step 1: get dependency IDs from gogdl info
     send('Checking game dependencies...\n');
     let depIds = '';
     try {
@@ -849,7 +989,6 @@ ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPat
 
     send(`Dependencies: ${depIds}\nDownloading compatibility files...\n`);
 
-    // Step 2: download via gogdl redist into a shared redist dir
     const redistDir = path.join(configDir, 'redist');
     try { fs.mkdirSync(redistDir, { recursive: true }); } catch {}
 
@@ -864,7 +1003,6 @@ ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPat
     try { fs.unlinkSync(authPath); } catch {}
     if (dlCode !== 0) { sendDone(false, `Download failed (exit ${dlCode})`); return { ok: false }; }
 
-    // Step 3: read manifest to get exact exe paths + arguments (same approach as Heroic)
     const manifestPath = path.join(redistDir, '.gogdl-redist-manifest');
     let depots = [];
     try {
@@ -881,7 +1019,6 @@ ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPat
         return { ok: true, installed: 0 };
     }
 
-    // Step 4: resolve Proton + umu-run (mirrors Heroic's runWineCommand)
     const resolvedProton = expandTilde(protonPath)
         || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value;
     const umu = findUmu();
@@ -895,44 +1032,18 @@ ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPat
 
     let installed = 0;
     for (const depot of depots) {
-        // exe path in manifest uses forward slashes; normalise to OS path
         const exeRel = depot.executable.path.split('/').join(path.sep);
         const exePath = path.join(redistDir, exeRel);
         const exeArgs = (depot.executable.arguments || '').trim().split(/\s+/).filter(Boolean);
-
-        if (!fs.existsSync(exePath)) {
-            send(`⚠ Missing installer: ${exeRel}\n`);
-            continue;
-        }
-
+        if (!fs.existsSync(exePath)) { send(`⚠ Missing installer: ${exeRel}\n`); continue; }
         send(`Installing ${path.basename(exePath)} (${depot.dependencyId})...\n`);
-
-        const runEnv = {
-            ...process.env,
-            WINEPREFIX: prefix,
-            STEAM_COMPAT_DATA_PATH: prefix,
-            STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot,
-            GAMEID: 'umu-0',
-            PROTON_VERB: 'run',
-        };
+        const runEnv = { ...process.env, WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix,
+                         STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot, GAMEID: 'umu-0', PROTON_VERB: 'run' };
         if (resolvedProton) runEnv.PROTONPATH = resolvedProton;
-
         let cmd, args;
-        if (umu && resolvedProton) {
-            // Primary: umu-run (Heroic's default path)
-            cmd = umu;
-            args = [exePath, ...exeArgs];
-        } else if (resolvedProton) {
-            // Fallback: call proton binary directly
-            cmd = path.join(resolvedProton, 'proton');
-            args = ['run', exePath, ...exeArgs];
-        } else {
-            // Last resort: system wine
-            cmd = which('wine');
-            args = [exePath, ...exeArgs];
-            delete runEnv.PROTONPATH;
-        }
-
+        if (umu && resolvedProton)      { cmd = umu;                               args = [exePath, ...exeArgs]; }
+        else if (resolvedProton)        { cmd = path.join(resolvedProton, 'proton'); args = ['run', exePath, ...exeArgs]; }
+        else                            { cmd = which('wine');                      args = [exePath, ...exeArgs]; delete runEnv.PROTONPATH; }
         await new Promise(res => {
             const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env: runEnv, cwd: redistDir });
             p.stdout.on('data', send);
@@ -942,9 +1053,75 @@ ipcMain.handle('gogdl-install-redist', async (event, appId, platform, installPat
         });
         installed++;
     }
-
     sendDone(true, `Installed ${installed} compatibility package(s).`);
     return { ok: true, installed };
+}
+
+ipcMain.handle('gogdl-install-redist', async (event, appId, platform, _installPath, prefixPath, protonPath) => {
+    return runRedist(event.sender, 'redist-progress', appId, platform, prefixPath, protonPath);
+});
+
+// Play tasks from goggame-<id>.info (GOG only)
+ipcMain.handle('get-play-tasks', (_, gameId) => {
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
+    if (!game || !game.install_path || game.store !== 'gog') return [];
+    const infoFile = path.join(expandTilde(game.install_path), `goggame-${game.app_id}.info`);
+    if (!fs.existsSync(infoFile)) return [];
+    try {
+        const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+        return (info.playTasks || [])
+            .filter(t => t.type === 'FileTask' && t.path)
+            .map(t => ({ name: t.name || t.path, path: t.path.replace(/\\/g, '/'),
+                         arguments: t.arguments || '', isPrimary: !!t.isPrimary }));
+    } catch { return []; }
+});
+
+// Run any .exe / .msi inside the game's Wine prefix (mod installers, tools, etc.)
+ipcMain.handle('run-exe-on-prefix', async (_, gameId) => {
+    const result = await dialog.showOpenDialog(win, {
+        title: 'Select executable to run in game prefix',
+        filters: [{ name: 'Windows Executables', extensions: ['exe', 'msi', 'bat'] }],
+        properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true };
+
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
+    if (!game) return { ok: false, error: 'Game not found' };
+
+    const exe = result.filePaths[0];
+    const prefix = expandTilde(game.prefix_path) || (() => {
+        const safeName = (game.title || gameId).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || gameId;
+        return path.join(prefixesDir, safeName);
+    })();
+    const proton = expandTilde(game.proton_path)
+        || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value || '';
+    fs.mkdirSync(prefix, { recursive: true });
+    const umu = findUmu();
+    const steamRoot = path.join(HOME, '.steam', 'root');
+
+    const customEnv = {};
+    for (const line of (game.custom_env || '').split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq > 0) customEnv[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+    const env = { ...process.env, ...customEnv, WINEPREFIX: prefix,
+                  STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot,
+                  GAMEID: 'umu-0', PROTON_VERB: 'run' };
+    if (proton) env.PROTONPATH = proton;
+
+    if (umu && proton) {
+        spawn(umu, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'umu-run' };
+    }
+    if (proton) {
+        const protonBin = path.join(proton, 'proton');
+        spawn(protonBin, ['run', exe], { env, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'proton-direct' };
+    }
+    const wine = which('wine');
+    if (!wine) return { ok: false, error: 'No runner: umu-run not found, no Proton set, wine not installed.' };
+    spawn(wine, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+    return { ok: true, method: 'wine' };
 });
 
 // ── GOG / gogdl ───────────────────────────────────────────────────────────────
@@ -1192,12 +1369,27 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
 
         activeGogInstallProc.stdout.on('data', send);
         activeGogInstallProc.stderr.on('data', send);
-        activeGogInstallProc.on('close', code => {
+        activeGogInstallProc.on('close', async code => {
             activeGogInstallProc = null;
             try { fs.unlinkSync(authPath); } catch {}
             const gameInfo = code === 0 ? findGogInstallResult(dir, appId) : null;
-            // Exit 0 with no game files on disk = gogdl said "Nothing to do" — treat as failure
             const ok = code === 0 && gameInfo !== null;
+
+            if (ok) {
+                // Auto-install compatibility files right after a successful GOG install
+                const game = db.prepare("SELECT * FROM games WHERE app_id=? AND store='gog'").get(appId);
+                if (game) {
+                    const prefixPath = expandTilde(game.prefix_path) || (() => {
+                        const safeName = (game.title || game.id).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || game.id;
+                        return path.join(prefixesDir, safeName);
+                    })();
+                    const protonPath = game.proton_path
+                        || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value;
+                    send('\n─── Auto-installing compatibility files ───\n');
+                    await runRedist(event.sender, 'gog-install-progress', appId, platform, prefixPath, protonPath);
+                }
+            }
+
             resolve({ ok, exitCode: code, install_dir: dir, gameInfo,
                       error: code === 0 && !gameInfo
                           ? 'gogdl exited without downloading any files. The game may not support this platform or the manifest is cached incorrectly. Try verifying your GOG login.'

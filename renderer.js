@@ -310,10 +310,35 @@ function openModal(game = null) {
     document.getElementById('edit-prefix').value       = game?.prefix_path  || '';
     populateProtonDropdown(protonVersions, game?.proton_path || '');
     document.getElementById('edit-notes').value        = game?.notes        || '';
-    document.getElementById('edit-env').value          = game?.custom_env   || '';
-    document.getElementById('edit-winetricks').value   = game?.winetricks   || '';
+    document.getElementById('edit-env').value              = game?.custom_env    || '';
+    document.getElementById('edit-winetricks').value       = game?.winetricks    || '';
+    document.getElementById('edit-esync').checked          = game ? (game.use_esync    !== 0) : true;
+    document.getElementById('edit-fsync').checked          = game ? (game.use_fsync    !== 0) : true;
+    document.getElementById('edit-dxvk-nvapi').checked     = !!(game?.use_dxvk_nvapi);
+    document.getElementById('edit-battleye').checked       = !!(game?.use_battleye);
+    document.getElementById('edit-eac').checked            = !!(game?.use_eac);
     const isGog = (game?.store === 'gog');
     document.getElementById('edit-gog-compat').style.display = isGog ? 'flex' : 'none';
+
+    // Load play tasks for launch target dropdown (GOG only)
+    const launchTargetRow = document.getElementById('edit-launch-target-row');
+    const launchTargetSel = document.getElementById('edit-launch-target');
+    launchTargetSel.innerHTML = '<option value="">Default executable</option>';
+    launchTargetRow.style.display = 'none';
+    if (game?.id && isGog) {
+        window.api.getPlayTasks(game.id).then(tasks => {
+            if (!tasks || tasks.length <= 1) return;
+            tasks.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.path;
+                opt.textContent = t.name + (t.isPrimary ? ' (default)' : '');
+                if (game.launch_target === t.path) opt.selected = true;
+                launchTargetSel.appendChild(opt);
+            });
+            launchTargetRow.style.display = 'flex';
+        });
+    }
+
     modal.classList.add('active');
     document.getElementById('edit-title').focus();
 }
@@ -338,9 +363,15 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
         prefix_path:  document.getElementById('edit-prefix').value.trim()        || null,
         proton_path:  document.getElementById('edit-proton').value                || null,
         notes:        document.getElementById('edit-notes').value.trim()          || null,
-        custom_env:   document.getElementById('edit-env').value.trim()            || null,
-        winetricks:   document.getElementById('edit-winetricks').value.trim()     || null,
-        installed:    document.getElementById('edit-install-path').value.trim() ? 1 : 0,
+        custom_env:    document.getElementById('edit-env').value.trim()           || null,
+        winetricks:    document.getElementById('edit-winetricks').value.trim()    || null,
+        use_esync:     document.getElementById('edit-esync').checked     ? 1 : 0,
+        use_fsync:     document.getElementById('edit-fsync').checked     ? 1 : 0,
+        use_dxvk_nvapi:document.getElementById('edit-dxvk-nvapi').checked? 1 : 0,
+        use_battleye:  document.getElementById('edit-battleye').checked  ? 1 : 0,
+        use_eac:          document.getElementById('edit-eac').checked            ? 1 : 0,
+        launch_target:    document.getElementById('edit-launch-target').value      || null,
+        installed:     document.getElementById('edit-install-path').value.trim() ? 1 : 0,
     };
 
     if (id) {
@@ -354,9 +385,11 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     await loadGames();
 });
 
-// Also toggle GOG compat section when store changes inside the modal
+// Toggle store-specific sections when store changes inside the modal
 document.getElementById('edit-store').addEventListener('change', e => {
-    document.getElementById('edit-gog-compat').style.display = e.target.value === 'gog' ? 'flex' : 'none';
+    const isGog = e.target.value === 'gog';
+    document.getElementById('edit-gog-compat').style.display = isGog ? 'flex' : 'none';
+    if (!isGog) document.getElementById('edit-launch-target-row').style.display = 'none';
 });
 
 // ── Compat modal (winetricks / redist) ────────────────────────────────────────
@@ -394,6 +427,35 @@ window.api.onWinetricksProgress(data => {
 window.api.onRedistProgress(data => {
     if (data.line)   appendCompatLine(data.line);
     if (data.done)   finishCompatModal(data.ok, data.msg);
+});
+
+// Browse install folder
+document.getElementById('btn-browse-install').addEventListener('click', async () => {
+    const p = document.getElementById('edit-install-path').value.trim();
+    if (!p) { showAlert('Browse', 'Enter an install path first.'); return; }
+    const err = await window.api.openPath(p);
+    if (err) showAlert('Browse', `Could not open folder: ${err}`);
+});
+
+// Browse prefix folder
+document.getElementById('btn-browse-prefix').addEventListener('click', async () => {
+    let p = document.getElementById('edit-prefix').value.trim();
+    if (!p) {
+        // Fall back to the resolved default prefix for this game
+        const gameId = document.getElementById('edit-id').value;
+        if (gameId) p = await window.api.getGamePrefix(gameId);
+    }
+    if (!p) { showAlert('Browse', 'No prefix path set and game not saved yet.'); return; }
+    const err = await window.api.openPath(p);
+    if (err) showAlert('Browse', `Could not open folder: ${err}`);
+});
+
+// Run .exe on Prefix button
+document.getElementById('btn-run-exe-on-prefix').addEventListener('click', async () => {
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('Run .exe', 'Save the game first so the prefix can be resolved.'); return; }
+    const result = await window.api.runExeOnPrefix(gameId);
+    if (result && !result.ok && !result.canceled) showAlert('Run .exe', result.error || 'Could not launch executable.');
 });
 
 // Run Winetricks button
@@ -567,10 +629,15 @@ window.api.onInstallProgress(data => {
 window.api.onGogInstallProgress(data => {
     const log = document.getElementById('install-log');
     if (!log) return;
-    log.textContent += data;
-    log.scrollTop = log.scrollHeight;
-
-    const { pct, speed, eta } = parseProgress(data);
+    // Regular install sends plain strings; auto-redist sends { line, done, ok, msg }
+    const text = (typeof data === 'object') ? (data.line || '') : String(data);
+    if (text) { log.textContent += text; log.scrollTop = log.scrollHeight; }
+    if (typeof data === 'object' && data.done) {
+        log.textContent += (data.ok ? '\n✓ ' : '\n✗ ') + (data.msg || '') + '\n';
+        log.scrollTop = log.scrollHeight;
+        return;
+    }
+    const { pct, speed, eta } = parseProgress(text);
     if (pct !== null) {
         document.getElementById('install-progress-bar').style.width = pct + '%';
         document.getElementById('install-pct-label').textContent = pct.toFixed(1) + '%';
@@ -630,10 +697,11 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     } else {
         document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? result.error ?? 'error'}).\n`;
         document.getElementById('install-progress-panel').style.display = 'flex';
-        document.getElementById('btn-install-cancel-running').textContent = 'Close';
-        document.getElementById('btn-install-cancel-running').style.borderColor = 'var(--border_solid)';
-        document.getElementById('btn-install-cancel-running').style.color = 'var(--text_sec)';
-        document.getElementById('btn-install-cancel-running').onclick = closeInstallModal;
+        const cancelBtn = document.getElementById('btn-install-cancel-running');
+        cancelBtn.textContent = 'Close';
+        cancelBtn.className = 'btn-cancel';
+        cancelBtn.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
+        cancelBtn.onclick = closeInstallModal;
         setStatus(`Installation of ${installingGame.title} failed.`);
     }
 });
@@ -696,27 +764,99 @@ let importSelected  = new Set();
 
 // ── Import modal tab switching ─────────────────────────────────────────────────
 function switchImportTab(tab) {
-    document.getElementById('tab-panel-epic').style.display = tab === 'epic' ? 'flex' : 'none';
-    document.getElementById('tab-panel-gog').style.display  = tab === 'gog'  ? 'flex' : 'none';
-    document.getElementById('tab-epic').classList.toggle('active', tab === 'epic');
-    document.getElementById('tab-gog').classList.toggle('active',  tab === 'gog');
+    ['epic','gog','steam'].forEach(t => {
+        document.getElementById(`tab-panel-${t}`).style.display = tab === t ? 'flex' : 'none';
+        document.getElementById(`tab-${t}`).classList.toggle('active', tab === t);
+    });
 }
-document.getElementById('tab-epic')?.addEventListener('click', () => switchImportTab('epic'));
-document.getElementById('tab-gog')?.addEventListener('click',  () => { switchImportTab('gog'); loadGogImportData(); });
+document.getElementById('tab-epic')?.addEventListener('click',  () => switchImportTab('epic'));
+document.getElementById('tab-gog')?.addEventListener('click',   () => { switchImportTab('gog');   loadGogImportData(); });
+document.getElementById('tab-steam')?.addEventListener('click', () => switchImportTab('steam'));
 
 function openImportModal(tab = 'epic') {
     modalImport.classList.add('active');
     switchImportTab(tab);
-    if (tab === 'epic') loadImportData();
-    else                loadGogImportData();
+    if (tab === 'epic')  loadImportData();
+    if (tab === 'gog')   loadGogImportData();
 }
 function closeImportModal() { modalImport.classList.remove('active'); }
 
 document.getElementById('btn-import-legendary')?.addEventListener('click', () => openImportModal('epic'));
 document.getElementById('btn-import-gog')?.addEventListener('click',       () => openImportModal('gog'));
+document.getElementById('btn-import-steam')?.addEventListener('click',     () => { openImportModal('steam'); scanSteamLibrary(); });
 document.getElementById('btn-import-cancel')?.addEventListener('click', closeImportModal);
 document.getElementById('btn-gog-import-cancel')?.addEventListener('click', closeImportModal);
+document.getElementById('btn-steam-import-cancel')?.addEventListener('click', closeImportModal);
 modalImport?.addEventListener('click', e => { if (e.target === modalImport) closeImportModal(); });
+
+// ── Steam import ──────────────────────────────────────────────────────────────
+let steamImportGames    = [];
+let steamImportSelected = new Set();
+
+async function scanSteamLibrary() {
+    const confirmBtn = document.getElementById('btn-steam-import-confirm');
+    const gamesPanel = document.getElementById('steam-games-panel');
+    const emptyPanel = document.getElementById('steam-empty');
+    confirmBtn.style.display = 'none';
+    gamesPanel.style.display = 'none';
+    emptyPanel.style.display = 'none';
+    setStatus('Scanning Steam library…');
+    const result = await window.api.steamListInstalled();
+    if (!result.games?.length) { emptyPanel.style.display = 'block'; setStatus('No Steam games found.'); return; }
+    steamImportGames    = result.games;
+    steamImportSelected = new Set(steamImportGames.filter(g => !allGames.some(a => a.app_id === g.appId && a.store === 'steam')).map(g => g.appId));
+    gamesPanel.style.display = 'flex';
+    confirmBtn.style.display = '';
+    renderSteamImportList();
+    setStatus(`Found ${steamImportGames.length} Steam game${steamImportGames.length !== 1 ? 's' : ''}.`);
+}
+
+function renderSteamImportList() {
+    const list    = document.getElementById('steam-game-list');
+    const countEl = document.getElementById('steam-sel-count');
+    countEl.textContent = `${steamImportSelected.size} / ${steamImportGames.length} selected`;
+    list.innerHTML = steamImportGames.map(g => {
+        const alreadyIn = allGames.some(a => a.app_id === g.appId && a.store === 'steam');
+        const checked   = steamImportSelected.has(g.appId);
+        const platBadge = g.platform === 'linux'
+            ? `<span style="font-size:9px;color:#66bb6a;font-weight:900;padding:1px 6px;border:1px solid rgba(102,187,106,0.4);border-radius:3px;">LINUX</span>`
+            : `<span style="font-size:9px;color:#1a9fff;font-weight:900;padding:1px 6px;border:1px solid rgba(26,159,255,0.4);border-radius:3px;">PROTON</span>`;
+        return `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(0,0,0,0.2);border-radius:5px;cursor:${alreadyIn?'default':'pointer'};border:1px solid var(--border_solid);">
+            <input type="checkbox" data-steamid="${g.appId}" ${checked && !alreadyIn ? 'checked' : ''} ${alreadyIn ? 'disabled' : ''} style="accent-color:#1a9fff;width:14px;height:14px;flex-shrink:0;">
+            <span style="flex:1;font-size:12px;font-weight:700;color:${alreadyIn?'var(--text_dim)':'var(--text_main)'};">${g.name}</span>
+            ${platBadge}
+            ${alreadyIn ? '<span style="font-size:10px;color:#66bb6a;font-weight:700;">Already imported</span>' : ''}
+        </label>`;
+    }).join('');
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) steamImportSelected.add(cb.dataset.steamid);
+            else            steamImportSelected.delete(cb.dataset.steamid);
+            document.getElementById('steam-sel-count').textContent = `${steamImportSelected.size} / ${steamImportGames.length} selected`;
+        });
+    });
+}
+
+document.getElementById('btn-steam-select-all')?.addEventListener('click', () => {
+    steamImportSelected = new Set(steamImportGames.filter(g => !allGames.some(a => a.app_id === g.appId && a.store === 'steam')).map(g => g.appId));
+    renderSteamImportList();
+});
+document.getElementById('btn-steam-select-none')?.addEventListener('click', () => { steamImportSelected.clear(); renderSteamImportList(); });
+document.getElementById('btn-steam-scan')?.addEventListener('click', scanSteamLibrary);
+
+document.getElementById('btn-steam-import-confirm')?.addEventListener('click', async () => {
+    const toImport = steamImportGames.filter(g => steamImportSelected.has(g.appId));
+    if (!toImport.length) { setStatus('Nothing selected.'); return; }
+    const result = await window.api.steamImport(toImport);
+    if (result.ok) {
+        setStatus(`Imported ${result.count} Steam game${result.count !== 1 ? 's' : ''}.`);
+        closeImportModal();
+        await loadGames();
+    } else {
+        setStatus(`Import failed: ${result.error}`);
+    }
+});
 
 document.getElementById('btn-epic-login')?.addEventListener('click', async () => {
     document.getElementById('btn-epic-login').disabled = true;
@@ -1055,8 +1195,8 @@ async function loadSettings() {
         window.api.getSetting('default_proton_path'),
         window.api.getSetting('default_prefix_dir'),
     ]);
-    document.getElementById('s-proton').value     = proton     || '';
-    document.getElementById('s-prefix-dir').value = prefixDir  || '';
+    document.getElementById('s-proton').value      = proton    || '';
+    document.getElementById('s-prefix-dir').value  = prefixDir || '';
     renderProtonList(protonVersions);
     await Promise.all([checkTools(), refreshLegendaryStatus(), refreshGogStatus()]);
 }
@@ -1149,6 +1289,18 @@ document.addEventListener('keydown', e => {
 });
 
 // ── CLI search (launched from CNGM with a game name) ─────────────────────────
+// Opened by CNGM's "Setup with GRINDER" button — go straight to Edit modal for this game
+window.api.onCliSetup(id => {
+    const game = allGames.find(g => g.id === id);
+    if (game) {
+        openModal(game);
+    } else {
+        // Game not in library yet (shouldn't happen if CNGM wrote it first, but search as fallback)
+        const input = document.getElementById('search-input');
+        if (input) { input.value = id; renderGames(filterGames()); }
+    }
+});
+
 window.api.onCliSearch(term => {
     const input = document.getElementById('search-input');
     if (!input) return;

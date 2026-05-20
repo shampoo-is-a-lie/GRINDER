@@ -75,4 +75,14 @@ contextBridge.exposeInMainWorld('api', {
     gogInstallRedist:     (appId, plat, inst, prefix, proton) => ipcRenderer.invoke('gogdl-install-redist', appId, plat, inst, prefix, proton),
     onWinetricksProgress: (cb) => ipcRenderer.on('winetricks-progress', (_, d) => cb(d)),
     onRedistProgress:     (cb) => ipcRenderer.on('redist-progress',     (_, d) => cb(d)),
+    onCliSetup:           (cb) => ipcRenderer.on('cli-setup', (_, id) => cb(id)),
+
+    // Play tasks + run-exe
+    getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
+    runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),
+
+    // Steam library
+    steamListInstalled: () => ipcRenderer.invoke('steam-list-installed'),
+    steamImport: (games) => ipcRenderer.invoke('steam-import', games),
+
 });
