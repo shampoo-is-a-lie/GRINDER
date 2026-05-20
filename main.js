@@ -42,6 +42,20 @@ function writeProgress(data) {
     try { fs.writeFileSync(progressFile, JSON.stringify(data), 'utf8'); } catch {}
 }
 
+function syncSharedDb(appId, installed) {
+    const sharedDbPath = path.join(appImageDir, 'GameManagerConfig', 'games.db');
+    if (!fs.existsSync(sharedDbPath)) return;
+    try {
+        const sdb = new Database(sharedDbPath);
+        // Match by app_id column, or fall back to matching the ID inside the LaunchCommand
+        const byAppId = sdb.prepare("UPDATE games SET Installed=? WHERE app_id=?").run(installed ? 1 : 0, appId);
+        if (byAppId.changes === 0) {
+            sdb.prepare("UPDATE games SET Installed=? WHERE LaunchCommand LIKE ?").run(installed ? 1 : 0, `%${appId}%`);
+        }
+        sdb.close();
+    } catch {}
+}
+
 async function headlessInstall(store, appId, platform, installDir) {
     const title = (() => { try { return db?.prepare("SELECT title FROM games WHERE app_id=? AND store=?").get(appId, store)?.title || appId; } catch { return appId; } })();
     const base = { title, store, appId, done: false };
@@ -107,6 +121,7 @@ async function headlessInstall(store, appId, platform, installDir) {
                 await runRedist(fakeSender, 'x', appId, platform || 'windows', prefixPath, protonPath);
             }
         } catch {}
+        syncSharedDb(appId, true);
         writeProgress({ ...base, step: 'done', percent: 100, message: 'Installation complete!', done: true });
 
     } else if (store === 'epic') {
@@ -138,6 +153,7 @@ async function headlessInstall(store, appId, platform, installDir) {
             const game = db?.prepare("SELECT * FROM games WHERE app_id=? AND store='epic'").get(appId);
             if (game) { const info = await getGameInstallInfo(appId); if (info) db.prepare("UPDATE games SET installed=1, install_path=?, executable=? WHERE id=?").run(info.install_path, info.executable, game.id); }
         } catch {}
+        syncSharedDb(appId, true);
         writeProgress({ ...base, step: 'done', percent: 100, message: 'Installation complete!', done: true });
     }
 }
@@ -168,6 +184,7 @@ async function headlessUninstall(store, appId) {
         }
     }
     try { db?.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(game.id); } catch {}
+    syncSharedDb(appId, false);
     writeProgress({ ...base, step: 'done', percent: 100, message: 'Game uninstalled.', done: true });
 }
 
