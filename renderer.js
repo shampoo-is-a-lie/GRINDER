@@ -1,9 +1,66 @@
 'use strict';
 
-// ── Theme (reuses CNGM cache) ─────────────────────────────────────────────────
-window.api.getSetting('cngm_theme').then(saved => {
-    if (saved) {
-        // Apply theme from DB if CNGM has set one — just reuse the cache already applied by the inline script
+// ── Theme sync with CNGM ──────────────────────────────────────────────────────
+// When launched from CNGM, GRINDER reads CNGM's active theme and applies it
+// so both apps look identical. Falls back to GRINDER's default if not found.
+const CNGM_THEMES = {
+    "DARK GRAY": {bg:"#141414",bg_panel:"rgba(0,0,0,0.5)",bg_menu:"#222222",accent:"#ffffff",text_main:"#ffffff",text_sec:"#bbbbbb",text_dim:"#777777",border:"rgba(255,255,255,0.1)",border_solid:"#555555"},
+    "CREMA": {bg:"#2C1E16",bg_panel:"rgba(67,40,24,0.6)",bg_menu:"#432818",accent:"#D4A373",text_main:"#FFE6A7",text_sec:"#E6CC98",text_dim:"#A47148",border:"rgba(212,163,115,0.2)",border_solid:"#8B5A2B"},
+    "CYBERPUNK": {bg:"#09090b",bg_panel:"rgba(26,26,46,0.7)",bg_menu:"#1a1a2e",accent:"#f3e600",text_main:"#00ffcc",text_sec:"#e0e0e0",text_dim:"#ff003c",border:"rgba(243,230,0,0.2)",border_solid:"#ff003c"},
+    "VAPOUR OS": {bg:"#171a21",bg_panel:"rgba(27,40,56,0.7)",bg_menu:"#1b2838",accent:"#66c0f4",text_main:"#c7d5e0",text_sec:"#8f98a0",text_dim:"#556b82",border:"rgba(102,192,244,0.2)",border_solid:"#2a475e"},
+    "PSIV BLUE": {bg:"#000022",bg_panel:"rgba(0,67,156,0.4)",bg_menu:"#001144",accent:"#ffffff",text_main:"#ffffff",text_sec:"#aaaaaa",text_dim:"#666666",border:"rgba(0,112,204,0.3)",border_solid:"#00439c"},
+    "GREEN BOX": {bg:"#0e0e0e",bg_panel:"rgba(82,176,67,0.10)",bg_menu:"#111111",accent:"#52b043",text_main:"#ffffff",text_sec:"#a8d8a4",text_dim:"#3d8030",border:"rgba(82,176,67,0.22)",border_solid:"#1a3d1a"},
+    "MOVIESFLIX": {bg:"#141414",bg_panel:"rgba(255,255,255,0.07)",bg_menu:"#000000",accent:"#e50914",text_main:"#ffffff",text_sec:"#b3b3b3",text_dim:"#6d6d6d",border:"rgba(229,9,20,0.30)",border_solid:"#404040"},
+    "SNOW": {bg:"#0a1628",bg_panel:"rgba(32,68,110,0.65)",bg_menu:"#0f2040",accent:"#93d0f0",text_main:"#e8f4ff",text_sec:"#8bbbd8",text_dim:"#4a7898",border:"rgba(147,208,240,0.18)",border_solid:"#1c4060"},
+    "WIN XP": {bg:"#003399",bg_panel:"rgba(236,233,216,0.2)",bg_menu:"#0054E3",accent:"#ffd700",text_main:"#FFFFFF",text_sec:"#ECE9D8",text_dim:"#99B4D1",border:"rgba(236,233,216,0.4)",border_solid:"#4fcc3a"},
+    "PSIII CLASSIC": {bg:"#000000",bg_panel:"rgba(25,25,25,0.7)",bg_menu:"#111111",accent:"#dcdcdc",text_main:"#ffffff",text_sec:"#aaaaaa",text_dim:"#666666",border:"rgba(255,255,255,0.2)",border_solid:"#444444"},
+    "PSIII RED": {bg:"#2b0000",bg_panel:"rgba(40,0,0,0.7)",bg_menu:"#1a0000",accent:"#ff4d4d",text_main:"#ffffff",text_sec:"#ffcccc",text_dim:"#cc6666",border:"rgba(255,77,77,0.2)",border_solid:"#800000"},
+    "PSIII GREEN": {bg:"#001a00",bg_panel:"rgba(0,30,0,0.7)",bg_menu:"#000d00",accent:"#4dff4d",text_main:"#ffffff",text_sec:"#ccffcc",text_dim:"#66cc66",border:"rgba(77,255,77,0.2)",border_solid:"#004d00"},
+    "PSIII BLUE": {bg:"#000a1a",bg_panel:"rgba(0,15,30,0.7)",bg_menu:"#00050d",accent:"#4d94ff",text_main:"#ffffff",text_sec:"#cce0ff",text_dim:"#66a3ff",border:"rgba(77,148,255,0.2)",border_solid:"#003380"},
+    "PSIII PURPLE": {bg:"#1a001a",bg_panel:"rgba(30,0,30,0.7)",bg_menu:"#0d000d",accent:"#d24dff",text_main:"#ffffff",text_sec:"#f0ccff",text_dim:"#c266cc",border:"rgba(210,77,255,0.2)",border_solid:"#800080"},
+    "PSIII GOLD": {bg:"#261a00",bg_panel:"rgba(40,25,0,0.7)",bg_menu:"#130d00",accent:"#ffcc00",text_main:"#ffffff",text_sec:"#ffeecc",text_dim:"#cca300",border:"rgba(255,204,0,0.2)",border_solid:"#997300"},
+    "PSIII SILVER": {bg:"#1a1a1a",bg_panel:"rgba(35,35,35,0.7)",bg_menu:"#0d0d0d",accent:"#cccccc",text_main:"#ffffff",text_sec:"#e6e6e6",text_dim:"#999999",border:"rgba(204,204,204,0.2)",border_solid:"#666666"},
+    "DRACULA": {bg:"#282a36",bg_panel:"rgba(68,71,90,0.7)",bg_menu:"#44475a",accent:"#bd93f9",text_main:"#f8f8f2",text_sec:"#8be9fd",text_dim:"#8290bc",border:"rgba(189,147,249,0.2)",border_solid:"#8290bc"},
+    "GRUVBOX": {bg:"#282828",bg_panel:"rgba(60,56,54,0.8)",bg_menu:"#3c3836",accent:"#fabd2f",text_main:"#ebdbb2",text_sec:"#b8bb26",text_dim:"#a89984",border:"rgba(250,189,47,0.2)",border_solid:"#504945"},
+    "NORD": {bg:"#2e3440",bg_panel:"rgba(59,66,82,0.8)",bg_menu:"#3b4252",accent:"#88c0d0",text_main:"#eceff4",text_sec:"#e5e9f0",text_dim:"#7a8ba0",border:"rgba(136,192,208,0.2)",border_solid:"#5e6f84"},
+    "SOLARIZED DARK": {bg:"#002b36",bg_panel:"rgba(7,54,66,0.8)",bg_menu:"#073642",accent:"#2aa198",text_main:"#839496",text_sec:"#93a1a1",text_dim:"#7a9196",border:"rgba(42,161,152,0.2)",border_solid:"#1a5060"},
+    "CATPPUCCIN MOCHA": {bg:"#1e1e2e",bg_panel:"rgba(30,30,46,0.8)",bg_menu:"#181825",accent:"#cba6f7",text_main:"#cdd6f4",text_sec:"#bac2de",text_dim:"#6c7086",border:"rgba(203,166,247,0.2)",border_solid:"#313244"},
+    "CATPPUCCIN MACCHIATO": {bg:"#24273a",bg_panel:"rgba(36,39,58,0.8)",bg_menu:"#1e2030",accent:"#c6a0f6",text_main:"#cad3f5",text_sec:"#b8c0e0",text_dim:"#6e738d",border:"rgba(198,160,246,0.2)",border_solid:"#363a4f"},
+    "CATPPUCCIN FRAPPÉ": {bg:"#303446",bg_panel:"rgba(48,52,70,0.8)",bg_menu:"#292c3c",accent:"#ca9ee6",text_main:"#c6d0f5",text_sec:"#b5bfe2",text_dim:"#737994",border:"rgba(202,158,230,0.2)",border_solid:"#414559"},
+    "TOKYO NIGHT": {bg:"#1a1b26",bg_panel:"rgba(36,40,59,0.8)",bg_menu:"#16161e",accent:"#7aa2f7",text_main:"#c0caf5",text_sec:"#a9b1d6",text_dim:"#7885ac",border:"rgba(122,162,247,0.2)",border_solid:"#3d4468"},
+    "EVERFOREST": {bg:"#2b3339",bg_panel:"rgba(50,56,62,0.8)",bg_menu:"#2f383e",accent:"#a7c080",text_main:"#d3c6aa",text_sec:"#a7c080",text_dim:"#859289",border:"rgba(167,192,128,0.2)",border_solid:"#4b565c"},
+    "ROSÉ PINE": {bg:"#191724",bg_panel:"rgba(31,29,46,0.8)",bg_menu:"#1f1d2e",accent:"#c4a7e7",text_main:"#e0def4",text_sec:"#9ccfd8",text_dim:"#6e6a86",border:"rgba(196,167,231,0.2)",border_solid:"#26233a"},
+    "GAME BOY DMG": {bg:"#0f380f",bg_panel:"rgba(48,98,48,0.70)",bg_menu:"#1a4a1a",accent:"#9bbc0f",text_main:"#9bbc0f",text_sec:"#8bac0f",text_dim:"#306230",border:"rgba(155,188,15,0.25)",border_solid:"#306230"},
+    "PIP BOY": {bg:"#000000",bg_panel:"rgba(0,20,0,0.7)",bg_menu:"#001100",accent:"#14ff00",text_main:"#14ff00",text_sec:"#0ea000",text_dim:"#0a6000",border:"rgba(20,255,0,0.2)",border_solid:"#0ea000"},
+    "SEVASTOPOL": {bg:"#050d05",bg_panel:"rgba(10,25,10,0.7)",bg_menu:"#081808",accent:"#f5e6b3",text_main:"#f5e6b3",text_sec:"#a39977",text_dim:"#4d594d",border:"rgba(245,230,179,0.1)",border_solid:"#1a331a"},
+    "RIP AND TEAR CLASSIC": {bg:"#110000",bg_panel:"rgba(80,5,5,0.78)",bg_menu:"#1a0000",accent:"#ff0000",text_main:"#f5d020",text_sec:"#d0a000",text_dim:"#7a4400",border:"rgba(255,0,0,0.22)",border_solid:"#5a0000"},
+    "SUPER BROTHERS": {bg:"#5C94FC",bg_panel:"rgba(0,0,0,0.75)",bg_menu:"#000070",accent:"#F8D820",text_main:"#ffffff",text_sec:"#F8D820",text_dim:"#6898F8",border:"rgba(248,216,32,0.30)",border_solid:"#000000"},
+    "GREEN HILL": {bg:"#0044AA",bg_panel:"rgba(0,60,0,0.82)",bg_menu:"#003300",accent:"#F8D020",text_main:"#ffffff",text_sec:"#A8E888",text_dim:"#50A050",border:"rgba(248,208,32,0.30)",border_solid:"#006600"},
+    "NES": {bg:"#18181A",bg_panel:"rgba(40,38,42,0.85)",bg_menu:"#222024",accent:"#C42020",text_main:"#F0F0F0",text_sec:"#C0B8C0",text_dim:"#706870",border:"rgba(196,32,32,0.22)",border_solid:"#3C3A3E"},
+    "SNES": {bg:"#1E1828",bg_panel:"rgba(50,42,80,0.72)",bg_menu:"#160E20",accent:"#8060C8",text_main:"#E8E0F0",text_sec:"#A890C8",text_dim:"#605090",border:"rgba(128,96,200,0.22)",border_solid:"#302050"},
+    "BLOODBORNE": {bg:"#0a0606",bg_panel:"rgba(60,20,10,0.78)",bg_menu:"#150808",accent:"#c0952a",text_main:"#e8d8b0",text_sec:"#b09070",text_dim:"#604830",border:"rgba(192,149,42,0.22)",border_solid:"#4a1818"},
+    "METROID PRIME": {bg:"#050a12",bg_panel:"rgba(255,120,20,0.12)",bg_menu:"#080f1a",accent:"#ff6a00",text_main:"#e0f0ff",text_sec:"#60c8e0",text_dim:"#304858",border:"rgba(255,106,0,0.22)",border_solid:"#1a2a3a"},
+    "SILENT HILL": {bg:"#141210",bg_panel:"rgba(80,50,35,0.72)",bg_menu:"#1a1510",accent:"#c85020",text_main:"#e0d0c0",text_sec:"#a09080",text_dim:"#605040",border:"rgba(200,80,32,0.22)",border_solid:"#4a3020"},
+    "DIABLO": {bg:"#0c0808",bg_panel:"rgba(80,20,0,0.75)",bg_menu:"#140808",accent:"#e84000",text_main:"#f0d898",text_sec:"#c0a060",text_dim:"#705028",border:"rgba(232,64,0,0.22)",border_solid:"#4a1a00"},
+    "HALF-LIFE": {bg:"#141618",bg_panel:"rgba(245,130,32,0.12)",bg_menu:"#1c1e20",accent:"#f58320",text_main:"#f0f0f0",text_sec:"#b0b8c0",text_dim:"#606870",border:"rgba(245,131,32,0.22)",border_solid:"#2a3038"},
+    "SHOVEL KNIGHT": {bg:"#1a1a2e",bg_panel:"rgba(30,40,80,0.75)",bg_menu:"#100c20",accent:"#f8d840",text_main:"#e8f0ff",text_sec:"#88b8f8",text_dim:"#4060a0",border:"rgba(248,216,64,0.28)",border_solid:"#202858"},
+    "EARTHY & ORGANIC": {bg:"#3E4E3A",bg_panel:"rgba(91,107,85,0.7)",bg_menu:"#4F5D48",accent:"#D4B28C",text_main:"#F3EDE4",text_sec:"#D8D3C8",text_dim:"#8E9E88",border:"rgba(212,178,140,0.2)",border_solid:"#6b7d63"},
+    "DOPAMINE BRIGHTS": {bg:"#080810",bg_panel:"rgba(255,50,120,0.12)",bg_menu:"#100820",accent:"#FF2D78",text_main:"#ffffff",text_sec:"#FF80C0",text_dim:"#6030A0",border:"rgba(255,45,120,0.28)",border_solid:"#2A0850"},
+};
+
+window.api.getCngmTheme().then(name => {
+    const t = name && CNGM_THEMES[name];
+    if (t) {
+        const s = document.documentElement.style;
+        s.setProperty('--bg',           t.bg);
+        s.setProperty('--bg_panel',     t.bg_panel);
+        s.setProperty('--bg_menu',      t.bg_menu);
+        s.setProperty('--accent',       t.accent);
+        s.setProperty('--text_main',    t.text_main);
+        s.setProperty('--text_sec',     t.text_sec);
+        s.setProperty('--text_dim',     t.text_dim);
+        s.setProperty('--border',       t.border);
+        s.setProperty('--border_solid', t.border_solid);
     }
     window.api.signalReady();
 });

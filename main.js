@@ -14,6 +14,9 @@ const configDir = app.isPackaged
 const prefixesDir = path.join(configDir, 'prefixes');
 const dbPath      = path.join(configDir, 'grinder.db');
 
+// Directory containing the AppImage (same folder as CNGM.AppImage)
+const appImageDir = process.env.APPIMAGE ? path.dirname(process.env.APPIMAGE) : configDir;
+
 
 let db;
 let win;
@@ -432,6 +435,18 @@ ipcMain.handle('launch-game', async (_, gameId) => {
 // Settings
 ipcMain.handle('get-setting', (_, key) => db.prepare("SELECT value FROM settings WHERE key=?").get(key)?.value ?? null);
 ipcMain.handle('set-setting', (_, key, value) => { db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)").run(key, value); return true; });
+
+// Read the active theme name from CNGM's settings DB so GRINDER can match its appearance
+ipcMain.handle('get-cngm-theme', () => {
+    const cngmDb = path.join(appImageDir, 'GameManagerConfig', 'games.db');
+    if (!fs.existsSync(cngmDb)) return null;
+    try {
+        const db2 = new Database(cngmDb, { readonly: true });
+        const row = db2.prepare("SELECT value FROM settings WHERE key='cngm_theme'").get();
+        db2.close();
+        return row?.value || null;
+    } catch { return null; }
+});
 
 // Environment checks
 ipcMain.handle('check-tools', () => {

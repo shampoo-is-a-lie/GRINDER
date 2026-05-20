@@ -19,8 +19,9 @@ contextBridge.exposeInMainWorld('api', {
     launchGame: (id)     => ipcRenderer.invoke('launch-game', id),
 
     // Settings
-    getSetting: (k)    => ipcRenderer.invoke('get-setting', k),
-    setSetting: (k, v) => ipcRenderer.invoke('set-setting', k, v),
+    getSetting:    (k)    => ipcRenderer.invoke('get-setting', k),
+    setSetting:    (k, v) => ipcRenderer.invoke('set-setting', k, v),
+    getCngmTheme:  ()     => ipcRenderer.invoke('get-cngm-theme'),
 
     // Disk size (installed game)
     getDiskSize:      (p)              => ipcRenderer.invoke('get-disk-size', p),
