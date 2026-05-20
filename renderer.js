@@ -46,6 +46,22 @@ const CNGM_THEMES = {
     "SHOVEL KNIGHT": {bg:"#1a1a2e",bg_panel:"rgba(30,40,80,0.75)",bg_menu:"#100c20",accent:"#f8d840",text_main:"#e8f0ff",text_sec:"#88b8f8",text_dim:"#4060a0",border:"rgba(248,216,64,0.28)",border_solid:"#202858"},
     "EARTHY & ORGANIC": {bg:"#3E4E3A",bg_panel:"rgba(91,107,85,0.7)",bg_menu:"#4F5D48",accent:"#D4B28C",text_main:"#F3EDE4",text_sec:"#D8D3C8",text_dim:"#8E9E88",border:"rgba(212,178,140,0.2)",border_solid:"#6b7d63"},
     "DOPAMINE BRIGHTS": {bg:"#080810",bg_panel:"rgba(255,50,120,0.12)",bg_menu:"#100820",accent:"#FF2D78",text_main:"#ffffff",text_sec:"#FF80C0",text_dim:"#6030A0",border:"rgba(255,45,120,0.28)",border_solid:"#2A0850"},
+    "RETRO REVIVAL": {bg:"#2A1A10",bg_panel:"rgba(80,50,30,0.70)",bg_menu:"#1E1008",accent:"#E8883A",text_main:"#F8E8C8",text_sec:"#C8A878",text_dim:"#7A5838",border:"rgba(232,136,58,0.22)",border_solid:"#5A3820"},
+    "VAPORWAVE": {bg:"#0d0221",bg_panel:"rgba(80,10,100,0.65)",bg_menu:"#150330",accent:"#ff71ce",text_main:"#f0e0ff",text_sec:"#c080ff",text_dim:"#6030a0",border:"rgba(255,113,206,0.25)",border_solid:"#35005a"},
+    "AURORA": {bg:"#0a1520",bg_panel:"rgba(0,80,80,0.55)",bg_menu:"#081018",accent:"#00e8c8",text_main:"#d0f8f0",text_sec:"#78d8c8",text_dim:"#306858",border:"rgba(0,232,200,0.20)",border_solid:"#0a4040"},
+    "NOIR": {bg:"#0a0a0a",bg_panel:"rgba(45,45,45,0.78)",bg_menu:"#151515",accent:"#d4a030",text_main:"#e8e0d0",text_sec:"#a09888",text_dim:"#606058",border:"rgba(212,160,48,0.20)",border_solid:"#303028"},
+    "BIOLUMINESCENCE": {bg:"#020810",bg_panel:"rgba(0,120,120,0.42)",bg_menu:"#030c18",accent:"#00e8a8",text_main:"#c0f8f0",text_sec:"#60d8c8",text_dim:"#206858",border:"rgba(0,232,168,0.22)",border_solid:"#0a3838"},
+    "BRUTALIST": {bg:"#1a1a1a",bg_panel:"rgba(80,80,80,0.55)",bg_menu:"#222222",accent:"#e03000",text_main:"#f0f0f0",text_sec:"#c0c0c0",text_dim:"#808080",border:"rgba(224,48,0,0.25)",border_solid:"#404040"},
+    "OXOCARBON": {bg:"#161616",bg_panel:"rgba(38,38,38,0.85)",bg_menu:"#262626",accent:"#0f62fe",text_main:"#f4f4f4",text_sec:"#c6c6c6",text_dim:"#8d8d8d",border:"rgba(15,98,254,0.25)",border_solid:"#393939"},
+    "MATERIAL DARK": {bg:"#1a1c1e",bg_panel:"rgba(40,48,56,0.80)",bg_menu:"#212325",accent:"#4fc3f7",text_main:"#e1e2e8",text_sec:"#c1c2cb",text_dim:"#8589a0",border:"rgba(79,195,247,0.18)",border_solid:"#3a3f4a"},
+    "N7": {bg:"#080c14",bg_panel:"rgba(20,30,60,0.78)",bg_menu:"#0c1428",accent:"#cc0000",text_main:"#e8eeff",text_sec:"#7aa0cc",text_dim:"#3d5880",border:"rgba(204,0,0,0.25)",border_solid:"#1a2848"},
+    "TRON LEGACY": {bg:"#000000",bg_panel:"rgba(0,200,255,0.08)",bg_menu:"#000508",accent:"#00c8ff",text_main:"#ffffff",text_sec:"#80d8ff",text_dim:"#204858",border:"rgba(0,200,255,0.28)",border_solid:"#0a1a20"},
+    "DEAD SPACE": {bg:"#020202",bg_panel:"rgba(255,100,20,0.10)",bg_menu:"#050505",accent:"#ff6400",text_main:"#f0f0f0",text_sec:"#ff9060",text_dim:"#602010",border:"rgba(255,100,32,0.25)",border_solid:"#200800"},
+    "COLONY SHIP": {bg:"#10120e",bg_panel:"rgba(50,60,40,0.72)",bg_menu:"#141810",accent:"#c8b040",text_main:"#d8e0c0",text_sec:"#909a70",text_dim:"#485840",border:"rgba(200,176,64,0.22)",border_solid:"#303820"},
+    "NECROMORPH": {bg:"#030808",bg_panel:"rgba(0,80,20,0.60)",bg_menu:"#040a04",accent:"#80ff20",text_main:"#c8ffc0",text_sec:"#70c060",text_dim:"#306020",border:"rgba(128,255,32,0.22)",border_solid:"#0a2808"},
+    "CRIMSON PEAK": {bg:"#120508",bg_panel:"rgba(80,15,30,0.75)",bg_menu:"#1a080c",accent:"#d4904a",text_main:"#f0e0d8",text_sec:"#c0909a",text_dim:"#7a3848",border:"rgba(212,144,74,0.22)",border_solid:"#5a1520"},
+    "LAKESIDE CURSE": {bg:"#0c0a08",bg_panel:"rgba(60,40,20,0.72)",bg_menu:"#141008",accent:"#e09030",text_main:"#f0e8d0",text_sec:"#b09070",text_dim:"#706050",border:"rgba(224,144,48,0.22)",border_solid:"#402808"},
+    "THE BACKROOMS": {bg:"#1a1810",bg_panel:"rgba(220,200,100,0.10)",bg_menu:"#201e14",accent:"#d4c840",text_main:"#f0e8c8",text_sec:"#b0a870",text_dim:"#706840",border:"rgba(212,200,64,0.22)",border_solid:"#3a3820"},
 };
 
 window.api.getCngmTheme().then(name => {
