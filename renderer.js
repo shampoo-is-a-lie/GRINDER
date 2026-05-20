@@ -358,11 +358,11 @@ document.getElementById('search-input').addEventListener('input', () => renderGa
 
 document.getElementById('btn-verify-installs')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-verify-installs');
-    btn.textContent = '⏳ Verifying…';
+    btn.textContent = 'Checking...';
     btn.disabled = true;
     const { reset } = await window.api.verifyInstalls();
     await loadGames();
-    btn.textContent = '✓ Verify';
+    btn.textContent = 'Refresh & Check Size';
     btn.disabled = false;
     setStatus(reset > 0
         ? `Reset ${reset} game${reset !== 1 ? 's' : ''} with missing files — ready to reinstall.`
