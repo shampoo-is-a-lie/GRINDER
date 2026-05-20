@@ -160,17 +160,28 @@ function which(bin) {
     catch { return null; }
 }
 
-// Prefer bundled legendary; fall back to system install
+// Tool paths resolved once at startup — avoids repeated execSync('which ...') on every launch/IPC call
+let _legendary = null, _gogdl = null, _umu = null, _wine = null;
 function findLegendary() {
-    if (fs.existsSync(BUNDLED_LEGENDARY)) return BUNDLED_LEGENDARY;
-    return which('legendary');
+    if (_legendary !== null) return _legendary;
+    _legendary = fs.existsSync(BUNDLED_LEGENDARY) ? BUNDLED_LEGENDARY : (which('legendary') || '');
+    return _legendary || null;
 }
 function findGogdl() {
-    if (fs.existsSync(BUNDLED_GOGDL)) return BUNDLED_GOGDL;
-    return which('gogdl');
+    if (_gogdl !== null) return _gogdl;
+    _gogdl = fs.existsSync(BUNDLED_GOGDL) ? BUNDLED_GOGDL : (which('gogdl') || '');
+    return _gogdl || null;
 }
-// umu-run cannot be bundled (Python module); detect system install only
-function findUmu() { return which('umu-run'); }
+function findUmu() {
+    if (_umu !== null) return _umu;
+    _umu = which('umu-run') || '';
+    return _umu || null;
+}
+function findWineCached() {
+    if (_wine !== null) return _wine;
+    _wine = which('wine') || '';
+    return _wine || null;
+}
 
 // Locate BattlEye or EAC runtime: GRINDER's own copy first, then common Steam locations
 function findRuntime(name) {
@@ -272,7 +283,7 @@ async function launchGame(gameId) {
         return { ok: true, method: 'proton-direct' };
     }
 
-    const wine = which('wine');
+    const wine = findWineCached();
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
     spawn(wine, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
@@ -458,7 +469,7 @@ ipcMain.handle('check-tools', () => {
         gogdl:             gogdl,
         gogdl_bundled:     gogdl === BUNDLED_GOGDL,
         umu:               findUmu(),
-        wine:              which('wine'),
+        wine:              findWineCached(),
     };
 });
 
@@ -954,7 +965,7 @@ async function runRedist(sender, channel, appId, platform, prefixPath, protonPat
     const prefix = expandTilde(prefixPath);
     const steamRoot = path.join(HOME, '.steam', 'root');
 
-    if (!resolvedProton && !which('wine')) {
+    if (!resolvedProton && !findWineCached()) {
         sendDone(false, 'No Proton version configured and Wine not found. Set a default Proton in Settings.');
         return { ok: false };
     }
@@ -972,7 +983,7 @@ async function runRedist(sender, channel, appId, platform, prefixPath, protonPat
         let cmd, args;
         if (umu && resolvedProton)      { cmd = umu;                               args = [exePath, ...exeArgs]; }
         else if (resolvedProton)        { cmd = path.join(resolvedProton, 'proton'); args = ['run', exePath, ...exeArgs]; }
-        else                            { cmd = which('wine');                      args = [exePath, ...exeArgs]; delete runEnv.PROTONPATH; }
+        else                            { cmd = findWineCached();                      args = [exePath, ...exeArgs]; delete runEnv.PROTONPATH; }
         await new Promise(res => {
             const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env: runEnv, cwd: redistDir });
             p.stdout.on('data', send);
@@ -1047,7 +1058,7 @@ ipcMain.handle('run-exe-on-prefix', async (_, gameId) => {
         spawn(protonBin, ['run', exe], { env, detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'proton-direct' };
     }
-    const wine = which('wine');
+    const wine = findWineCached();
     if (!wine) return { ok: false, error: 'No runner: umu-run not found, no Proton set, wine not installed.' };
     spawn(wine, [exe], { env, detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };

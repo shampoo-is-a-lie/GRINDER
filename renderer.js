@@ -354,7 +354,11 @@ async function loadGameSizes() {
     }
 }
 
-document.getElementById('search-input').addEventListener('input', () => renderGames(filterGames()));
+let _searchDebounce = null;
+document.getElementById('search-input').addEventListener('input', () => {
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => renderGames(filterGames()), 150);
+});
 
 document.getElementById('btn-verify-installs')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-verify-installs');
