@@ -180,38 +180,6 @@ function findRuntime(name) {
     ].find(p => fs.existsSync(p)) || null;
 }
 
-// ── Steam library helpers (used by Steam import) ──────────────────────────────
-
-function getSteamLibraryPaths() {
-    const roots = [
-        path.join(HOME, '.local', 'share', 'Steam'),
-        path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam'),
-        path.join(HOME, '.steam', 'steam'),
-    ];
-    const dirs = new Set();
-    for (const root of roots) {
-        const sa = path.join(root, 'steamapps');
-        if (!fs.existsSync(sa)) continue;
-        dirs.add(sa);
-        try {
-            const vdf = path.join(sa, 'libraryfolders.vdf');
-            const content = fs.readFileSync(vdf, 'utf8');
-            for (const m of content.matchAll(/"path"\s+"([^"]+)"/g)) {
-                const extra = path.join(m[1], 'steamapps');
-                if (fs.existsSync(extra)) dirs.add(extra);
-            }
-        } catch {}
-    }
-    return [...dirs];
-}
-
-// Parse a VDF/ACF file into a flat key→value map (top-level keys only)
-function parseAcf(content) {
-    const result = {};
-    for (const m of content.matchAll(/"([^"]+)"\s+"([^"]+)"/g)) result[m[1]] = m[2];
-    return result;
-}
-
 
 // ── Launch engine ─────────────────────────────────────────────────────────────
 async function launchGame(gameId) {
@@ -266,13 +234,6 @@ async function launchGame(gameId) {
     // Base env: system → custom user vars → compat flags → GRINDER's required vars (highest priority)
     const baseEnv = (extra = {}) => ({ ...process.env, ...customEnv, ...compatEnv, ...extra });
 
-    // Steam games: launch via Steam client
-    if (game.store === 'steam') {
-        const appId = game.app_id;
-        if (!appId) throw new Error('No Steam App ID set for this game.');
-        spawn(`steam "steam://rungameid/${appId}"`, [], { shell: true, detached: true, stdio: 'ignore' }).unref();
-        return { ok: true, method: 'steam-client' };
-    }
 
     if (game.store === 'epic') {
         if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
@@ -867,53 +828,6 @@ ipcMain.handle('legendary-import', (_, games) => {
     catch (e) { return { ok: false, error: e.message }; }
 });
 
-// ── Steam library import ──────────────────────────────────────────────────────
-
-ipcMain.handle('steam-list-installed', () => {
-    const games = [];
-    const seen  = new Set();
-    for (const steamAppsDir of getSteamLibraryPaths()) {
-        let entries;
-        try { entries = fs.readdirSync(steamAppsDir); } catch { continue; }
-        for (const filename of entries) {
-            if (!filename.startsWith('appmanifest_') || !filename.endsWith('.acf')) continue;
-            try {
-                const data       = parseAcf(fs.readFileSync(path.join(steamAppsDir, filename), 'utf8'));
-                const appId      = data.appid;
-                const name       = data.name;
-                const installDir = data.installdir;
-                if (!appId || !name || seen.has(appId)) continue;
-                // Skip pure tools / SDKs (appids known to be non-games or Steamworks redistributables)
-                if (/^(Steam|Steamworks|Direct3D|Proton|SteamVR|Steam Linux Runtime|steam_)?$/i.test(name)) continue;
-                seen.add(appId);
-                const gameDir    = path.join(steamAppsDir, 'common', installDir);
-                const protonPfx  = path.join(steamAppsDir, 'compatdata', appId, 'pfx');
-                const isProton   = fs.existsSync(protonPfx);
-                const platform   = isProton ? 'windows' : 'linux';
-                games.push({ appId, name, installDir, gameDir, platform, steamAppsDir });
-            } catch {}
-        }
-    }
-    games.sort((a, b) => a.name.localeCompare(b.name));
-    return { games };
-});
-
-ipcMain.handle('steam-import', (_, games) => {
-    const stmt = db.prepare(`
-        INSERT OR IGNORE INTO games (id, title, store, app_id, install_path, installed, platform)
-        VALUES (?, ?, 'steam', ?, ?, 1, ?)
-    `);
-    const tx = db.transaction(list => {
-        let n = 0;
-        for (const g of list) {
-            stmt.run('steam_' + g.appId, g.name, g.appId, g.gameDir, g.platform);
-            n++;
-        }
-        return n;
-    });
-    try { return { ok: true, count: tx(games) }; }
-    catch (e) { return { ok: false, error: e.message }; }
-});
 
 // Returns the computed Wine prefix path for a game (same logic as launchGame)
 ipcMain.handle('get-game-prefix', (_, gameId) => {

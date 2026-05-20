@@ -764,99 +764,27 @@ let importSelected  = new Set();
 
 // ── Import modal tab switching ─────────────────────────────────────────────────
 function switchImportTab(tab) {
-    ['epic','gog','steam'].forEach(t => {
+    ['epic','gog'].forEach(t => {
         document.getElementById(`tab-panel-${t}`).style.display = tab === t ? 'flex' : 'none';
         document.getElementById(`tab-${t}`).classList.toggle('active', tab === t);
     });
 }
-document.getElementById('tab-epic')?.addEventListener('click',  () => switchImportTab('epic'));
-document.getElementById('tab-gog')?.addEventListener('click',   () => { switchImportTab('gog');   loadGogImportData(); });
-document.getElementById('tab-steam')?.addEventListener('click', () => switchImportTab('steam'));
+document.getElementById('tab-epic')?.addEventListener('click', () => switchImportTab('epic'));
+document.getElementById('tab-gog')?.addEventListener('click',  () => { switchImportTab('gog'); loadGogImportData(); });
 
 function openImportModal(tab = 'epic') {
     modalImport.classList.add('active');
     switchImportTab(tab);
-    if (tab === 'epic')  loadImportData();
-    if (tab === 'gog')   loadGogImportData();
+    if (tab === 'epic') loadImportData();
+    if (tab === 'gog')  loadGogImportData();
 }
 function closeImportModal() { modalImport.classList.remove('active'); }
 
 document.getElementById('btn-import-legendary')?.addEventListener('click', () => openImportModal('epic'));
 document.getElementById('btn-import-gog')?.addEventListener('click',       () => openImportModal('gog'));
-document.getElementById('btn-import-steam')?.addEventListener('click',     () => { openImportModal('steam'); scanSteamLibrary(); });
 document.getElementById('btn-import-cancel')?.addEventListener('click', closeImportModal);
 document.getElementById('btn-gog-import-cancel')?.addEventListener('click', closeImportModal);
-document.getElementById('btn-steam-import-cancel')?.addEventListener('click', closeImportModal);
 modalImport?.addEventListener('click', e => { if (e.target === modalImport) closeImportModal(); });
-
-// ── Steam import ──────────────────────────────────────────────────────────────
-let steamImportGames    = [];
-let steamImportSelected = new Set();
-
-async function scanSteamLibrary() {
-    const confirmBtn = document.getElementById('btn-steam-import-confirm');
-    const gamesPanel = document.getElementById('steam-games-panel');
-    const emptyPanel = document.getElementById('steam-empty');
-    confirmBtn.style.display = 'none';
-    gamesPanel.style.display = 'none';
-    emptyPanel.style.display = 'none';
-    setStatus('Scanning Steam library…');
-    const result = await window.api.steamListInstalled();
-    if (!result.games?.length) { emptyPanel.style.display = 'block'; setStatus('No Steam games found.'); return; }
-    steamImportGames    = result.games;
-    steamImportSelected = new Set(steamImportGames.filter(g => !allGames.some(a => a.app_id === g.appId && a.store === 'steam')).map(g => g.appId));
-    gamesPanel.style.display = 'flex';
-    confirmBtn.style.display = '';
-    renderSteamImportList();
-    setStatus(`Found ${steamImportGames.length} Steam game${steamImportGames.length !== 1 ? 's' : ''}.`);
-}
-
-function renderSteamImportList() {
-    const list    = document.getElementById('steam-game-list');
-    const countEl = document.getElementById('steam-sel-count');
-    countEl.textContent = `${steamImportSelected.size} / ${steamImportGames.length} selected`;
-    list.innerHTML = steamImportGames.map(g => {
-        const alreadyIn = allGames.some(a => a.app_id === g.appId && a.store === 'steam');
-        const checked   = steamImportSelected.has(g.appId);
-        const platBadge = g.platform === 'linux'
-            ? `<span style="font-size:9px;color:#66bb6a;font-weight:900;padding:1px 6px;border:1px solid rgba(102,187,106,0.4);border-radius:3px;">LINUX</span>`
-            : `<span style="font-size:9px;color:#1a9fff;font-weight:900;padding:1px 6px;border:1px solid rgba(26,159,255,0.4);border-radius:3px;">PROTON</span>`;
-        return `
-        <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(0,0,0,0.2);border-radius:5px;cursor:${alreadyIn?'default':'pointer'};border:1px solid var(--border_solid);">
-            <input type="checkbox" data-steamid="${g.appId}" ${checked && !alreadyIn ? 'checked' : ''} ${alreadyIn ? 'disabled' : ''} style="accent-color:#1a9fff;width:14px;height:14px;flex-shrink:0;">
-            <span style="flex:1;font-size:12px;font-weight:700;color:${alreadyIn?'var(--text_dim)':'var(--text_main)'};">${g.name}</span>
-            ${platBadge}
-            ${alreadyIn ? '<span style="font-size:10px;color:#66bb6a;font-weight:700;">Already imported</span>' : ''}
-        </label>`;
-    }).join('');
-    list.querySelectorAll('input[type=checkbox]').forEach(cb => {
-        cb.addEventListener('change', () => {
-            if (cb.checked) steamImportSelected.add(cb.dataset.steamid);
-            else            steamImportSelected.delete(cb.dataset.steamid);
-            document.getElementById('steam-sel-count').textContent = `${steamImportSelected.size} / ${steamImportGames.length} selected`;
-        });
-    });
-}
-
-document.getElementById('btn-steam-select-all')?.addEventListener('click', () => {
-    steamImportSelected = new Set(steamImportGames.filter(g => !allGames.some(a => a.app_id === g.appId && a.store === 'steam')).map(g => g.appId));
-    renderSteamImportList();
-});
-document.getElementById('btn-steam-select-none')?.addEventListener('click', () => { steamImportSelected.clear(); renderSteamImportList(); });
-document.getElementById('btn-steam-scan')?.addEventListener('click', scanSteamLibrary);
-
-document.getElementById('btn-steam-import-confirm')?.addEventListener('click', async () => {
-    const toImport = steamImportGames.filter(g => steamImportSelected.has(g.appId));
-    if (!toImport.length) { setStatus('Nothing selected.'); return; }
-    const result = await window.api.steamImport(toImport);
-    if (result.ok) {
-        setStatus(`Imported ${result.count} Steam game${result.count !== 1 ? 's' : ''}.`);
-        closeImportModal();
-        await loadGames();
-    } else {
-        setStatus(`Import failed: ${result.error}`);
-    }
-});
 
 document.getElementById('btn-epic-login')?.addEventListener('click', async () => {
     document.getElementById('btn-epic-login').disabled = true;

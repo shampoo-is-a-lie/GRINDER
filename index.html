@@ -308,7 +308,6 @@
       <div style="display:flex; border-bottom:1px solid var(--border_solid); margin-bottom:14px; margin-left:-30px; margin-right:-30px; padding:0 30px;">
         <button id="tab-epic"  class="store-tab active">Epic Games</button>
         <button id="tab-gog"   class="store-tab">GOG</button>
-        <button id="tab-steam" class="store-tab">Steam</button>
       </div>
 
       <!-- ── EPIC TAB ── -->
@@ -334,27 +333,6 @@
         <div class="modal-actions" style="margin-top:auto;">
           <button class="btn-cancel" id="btn-import-cancel">Close</button>
           <button class="btn-confirm" id="btn-import-confirm" style="display:none;">Import Selected</button>
-        </div>
-      </div>
-
-      <!-- ── STEAM TAB ── -->
-      <div id="tab-panel-steam" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
-        <p style="font-size:15px; color:var(--text_sec); margin:0; line-height:1.65;">
-          Scans your local Steam libraries for installed games. No login required.
-        </p>
-        <div id="steam-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <button id="btn-steam-select-all"  style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Select All</button>
-            <button id="btn-steam-select-none" style="font-size:13px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_sec); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">None</button>
-            <span id="steam-sel-count" style="font-size:14px; color:var(--text_dim); margin-left:auto;"></span>
-          </div>
-          <div id="steam-game-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; max-height:300px;"></div>
-        </div>
-        <div id="steam-empty" style="display:none; color:var(--text_dim); font-size:16px; text-align:center; padding:20px 0;">No Steam games found. Make sure Steam is installed and you have games installed.</div>
-        <div class="modal-actions" style="margin-top:auto;">
-          <button class="btn-cancel" id="btn-steam-import-cancel">Close</button>
-          <button id="btn-steam-scan"    class="btn-cancel" style="margin-right:auto;">Scan Library</button>
-          <button id="btn-steam-import-confirm" class="btn-confirm" style="display:none; background:#1a9fff; border-color:#1a9fff;">Import Selected</button>
         </div>
       </div>
 
@@ -398,7 +376,6 @@
           <option value="custom">Custom / Other</option>
           <option value="epic">Epic Games</option>
           <option value="gog">GOG</option>
-          <option value="steam">Steam</option>
         </select>
       </div>
       <div class="modal-row"><label>Store App ID (Legendary app name / GOG ID)</label><input id="edit-appid" placeholder="e.g. Celeste or 1207665503"></div>
@@ -533,7 +510,6 @@
           <button id="btn-add-game">+ Add Game</button>
           <button id="btn-import-legendary" style="background:rgba(0,120,242,0.15); border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Import Epic Games library">Epic</button>
           <button id="btn-import-gog"       style="background:rgba(155,89,217,0.15); border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Import GOG library">GOG</button>
-          <button id="btn-import-steam"     style="background:rgba(26,159,255,0.15); border:1px solid #1a9fff; color:#1a9fff; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Import Steam library">Steam</button>
           <button id="btn-verify-installs" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">Verify</button>
         </div>
         <div id="filter-bar"></div>

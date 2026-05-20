@@ -80,9 +80,4 @@ contextBridge.exposeInMainWorld('api', {
     // Play tasks + run-exe
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
     runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),
-
-    // Steam library
-    steamListInstalled: () => ipcRenderer.invoke('steam-list-installed'),
-    steamImport: (games) => ipcRenderer.invoke('steam-import', games),
-
 });
