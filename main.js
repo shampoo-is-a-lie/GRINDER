@@ -15,21 +15,147 @@ const prefixesDir = path.join(configDir, 'prefixes');
 const dbPath      = path.join(configDir, 'grinder.db');
 
 // Directory containing the AppImage (same folder as CNGM.AppImage)
-const appImageDir = process.env.APPIMAGE ? path.dirname(process.env.APPIMAGE) : configDir;
+const appImageDir  = process.env.APPIMAGE ? path.dirname(process.env.APPIMAGE) : configDir;
+const progressFile = path.join(appImageDir, 'GameManagerConfig', 'grinder-progress.json');
 
 
 let db;
 let win;
 
 // ── CLI mode detection ────────────────────────────────────────────────────────
-const allArgs     = process.argv;
-const launchIdx   = allArgs.indexOf('launch');
-const cliGameId   = launchIdx  !== -1 ? allArgs[launchIdx  + 1] : null;
-const cliMode     = !!cliGameId;   // headless: launch game and quit
-const searchIdx   = allArgs.indexOf('search');
-const cliSearch   = searchIdx  !== -1 ? allArgs.slice(searchIdx + 1).join(' ') : null;
-const setupIdx    = allArgs.indexOf('setup');
-const cliSetupId  = setupIdx   !== -1 ? allArgs[setupIdx   + 1] : null;
+const allArgs        = process.argv;
+const launchIdx      = allArgs.indexOf('launch');
+const cliGameId      = launchIdx !== -1 ? allArgs[launchIdx + 1] : null;
+const cliMode        = !!cliGameId;
+const searchIdx      = allArgs.indexOf('search');
+const cliSearch      = searchIdx !== -1 ? allArgs.slice(searchIdx + 1).join(' ') : null;
+const setupIdx       = allArgs.indexOf('setup');
+const cliSetupId     = setupIdx  !== -1 ? allArgs[setupIdx  + 1] : null;
+const installHIdx    = allArgs.indexOf('install');
+const cliInstall     = installHIdx !== -1 ? allArgs.slice(installHIdx + 1) : null;
+const uninstHIdx     = allArgs.indexOf('uninstall-headless');
+const cliUninstall   = uninstHIdx  !== -1 ? allArgs.slice(uninstHIdx  + 1) : null;
+const headlessInstMode = !!(cliInstall || cliUninstall);
+
+// ── Headless progress file ────────────────────────────────────────────────────
+function writeProgress(data) {
+    try { fs.writeFileSync(progressFile, JSON.stringify(data), 'utf8'); } catch {}
+}
+
+async function headlessInstall(store, appId, platform, installDir) {
+    const title = (() => { try { return db?.prepare("SELECT title FROM games WHERE app_id=? AND store=?").get(appId, store)?.title || appId; } catch { return appId; } })();
+    const base = { title, store, appId, done: false };
+
+    if (store === 'gog') {
+        const gogdl = findGogdl();
+        if (!gogdl) { writeProgress({ ...base, step: 'error', message: 'gogdl not found.', done: true }); return; }
+        const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
+        try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+        try { fs.chmodSync(gogdl, '755'); } catch {}
+        const manifestPath = path.join(configDir, 'gogdl', 'manifests', appId);
+        try { fs.rmSync(manifestPath, { force: true }); } catch {}
+        const authPath = writeGogAuthConfig();
+        writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Starting download...' });
+
+        const dlOk = await new Promise(resolve => {
+            const proc = spawn(gogdl, [
+                '--auth-config-path', authPath, 'download', appId,
+                '--platform', platform || 'windows', '--path', dir, '--lang', 'en-US',
+            ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GOGDL_CONFIG_PATH: configDir } });
+            let buf = '';
+            const onData = d => {
+                buf += String(d);
+                const lines = buf.split('\n'); buf = lines.pop();
+                for (const line of lines) {
+                    const pct = line.match(/(\d+(?:\.\d+)?)\s*%/)?.[1];
+                    const sz  = line.match(/([\d.]+\s*(?:GiB|MiB|GB|MB))\s*\/\s*([\d.]+\s*(?:GiB|MiB|GB|MB))/i);
+                    if (pct || sz) writeProgress({ ...base, step: 'downloading', percent: pct ? parseFloat(pct) : 0, message: sz ? `${sz[1]} / ${sz[2]}` : `${pct || 0}%` });
+                }
+            };
+            proc.stdout.on('data', onData); proc.stderr.on('data', onData);
+            proc.on('close', code => resolve(code === 0)); proc.on('error', () => resolve(false));
+        });
+        try { fs.unlinkSync(authPath); } catch {}
+        if (!dlOk) { writeProgress({ ...base, step: 'error', message: 'Download failed.', done: true }); return; }
+
+        const gameInfo = findGogInstallResult(dir, appId);
+        if (!gameInfo) { writeProgress({ ...base, step: 'error', message: 'Install verification failed.', done: true }); return; }
+        writeProgress({ ...base, step: 'installing', percent: 100, message: 'Updating library...' });
+
+        try {
+            const game = db?.prepare("SELECT * FROM games WHERE app_id=? AND store='gog'").get(appId);
+            if (game) {
+                db.prepare("UPDATE games SET installed=1, install_path=?, executable=? WHERE id=?").run(gameInfo.install_path, gameInfo.executable, game.id);
+                writeProgress({ ...base, step: 'redist', percent: 0, message: 'Checking compatibility files...' });
+                const prefixPath = expandTilde(game.prefix_path) || path.join(prefixesDir, (game.title || appId).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || appId);
+                const protonPath = game.proton_path || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value;
+                const fakeSender = { send: (_ch, data) => { const line = typeof data === 'object' ? (data.line || '') : String(data); if (line.trim()) writeProgress({ ...base, step: 'redist', percent: 0, message: line.trim().slice(0, 120) }); } };
+                await runRedist(fakeSender, 'x', appId, platform || 'windows', prefixPath, protonPath);
+            }
+        } catch {}
+        writeProgress({ ...base, step: 'done', percent: 100, message: 'Installation complete!', done: true });
+
+    } else if (store === 'epic') {
+        const leg = findLegendary();
+        if (!leg) { writeProgress({ ...base, step: 'error', message: 'legendary not found.', done: true }); return; }
+        const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
+        try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+        writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Starting download...' });
+        await new Promise(res => { const p = spawn(leg, ['uninstall', appId, '-y'], { stdio: 'ignore' }); p.on('close', res); p.on('error', res); });
+
+        const dlOk = await new Promise(resolve => {
+            const proc = spawn(leg, ['install', appId, '--base-path', dir, '-y'], { stdio: ['ignore', 'pipe', 'pipe'] });
+            let buf = '';
+            const onData = d => {
+                buf += String(d);
+                const lines = buf.split('\n'); buf = lines.pop();
+                for (const line of lines) {
+                    const pct = line.match(/(\d+(?:\.\d+)?)\s*%/)?.[1];
+                    const sz  = line.match(/([\d.]+\s*(?:GiB|MiB|GB|MB))\s*\/\s*([\d.]+\s*(?:GiB|MiB|GB|MB))/i);
+                    if (pct || sz) writeProgress({ ...base, step: 'downloading', percent: pct ? parseFloat(pct) : 0, message: sz ? `${sz[1]} / ${sz[2]}` : `${pct || 0}%` });
+                }
+            };
+            proc.stdout.on('data', onData); proc.stderr.on('data', onData);
+            proc.on('close', code => resolve(code === 0)); proc.on('error', () => resolve(false));
+        });
+        if (!dlOk) { writeProgress({ ...base, step: 'error', message: 'Download failed.', done: true }); return; }
+        writeProgress({ ...base, step: 'installing', percent: 100, message: 'Finalizing...' });
+        try {
+            const game = db?.prepare("SELECT * FROM games WHERE app_id=? AND store='epic'").get(appId);
+            if (game) { const info = await getGameInstallInfo(appId); if (info) db.prepare("UPDATE games SET installed=1, install_path=?, executable=? WHERE id=?").run(info.install_path, info.executable, game.id); }
+        } catch {}
+        writeProgress({ ...base, step: 'done', percent: 100, message: 'Installation complete!', done: true });
+    }
+}
+
+async function headlessUninstall(store, appId) {
+    const game = (() => { try { return db?.prepare("SELECT * FROM games WHERE app_id=? AND store=?").get(appId, store); } catch { return null; } })();
+    const title = game?.title || appId;
+    const base = { title, store, appId, done: false };
+    writeProgress({ ...base, step: 'uninstalling', percent: 0, message: 'Removing game files...' });
+    if (!game) { writeProgress({ ...base, step: 'error', message: 'Game not found.', done: true }); return; }
+
+    const installPath = expandTilde(game.install_path || '');
+    const defaultBase = expandTilde(db?.prepare("SELECT value FROM settings WHERE key='default_install_dir'").get()?.value || path.join(HOME, 'Games', 'CafeNeurotico'));
+    if (installPath && fs.existsSync(installPath)) {
+        const safe = installPath !== defaultBase && installPath !== HOME && installPath !== '/' && installPath.startsWith(defaultBase + path.sep);
+        if (safe) { try { fs.rmSync(installPath, { recursive: true, force: true }); } catch {} }
+    }
+    writeProgress({ ...base, step: 'uninstalling', percent: 50, message: 'Removing Wine prefix...' });
+    const safeName = (game.title || appId).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || appId;
+    const prefixPath = expandTilde(game.prefix_path) || path.join(prefixesDir, safeName);
+    if (fs.existsSync(prefixPath)) { try { fs.rmSync(prefixPath, { recursive: true, force: true }); } catch {} }
+
+    if (store === 'epic') {
+        const leg = findLegendary();
+        if (leg) {
+            writeProgress({ ...base, step: 'uninstalling', percent: 75, message: 'Removing Epic record...' });
+            await new Promise(res => { const p = spawn(leg, ['uninstall', appId, '-y'], { stdio: 'ignore' }); p.on('close', res); p.on('error', res); });
+        }
+    }
+    try { db?.prepare("UPDATE games SET installed=0, install_path=NULL, executable=NULL, version=NULL WHERE id=?").run(game.id); } catch {}
+    writeProgress({ ...base, step: 'done', percent: 100, message: 'Game uninstalled.', done: true });
+}
 
 // ── Database ──────────────────────────────────────────────────────────────────
 function initDb() {
@@ -324,6 +450,19 @@ if (cliMode) {
         launchGame(cliGameId)
             .then(r  => { console.log(`GRINDER: launched via ${r.method}`); setTimeout(() => app.quit(), 300); })
             .catch(e => { console.error('GRINDER error:', e.message); app.quit(); });
+    });
+} else if (headlessInstMode) {
+    // Headless install/uninstall mode — no window, writes progress to grinder-progress.json
+    app.disableHardwareAcceleration();
+    app.whenReady().then(async () => {
+        initDb();
+        try {
+            if (cliInstall)    await headlessInstall(cliInstall[0], cliInstall[1], cliInstall[2], cliInstall[3]);
+            else               await headlessUninstall(cliUninstall[0], cliUninstall[1]);
+        } catch (e) {
+            writeProgress({ step: 'error', message: e.message, done: true });
+        }
+        setTimeout(() => app.quit(), 500);
     });
 } else {
     // Single-instance lock for windowed mode — second instance focuses existing window
