@@ -85,20 +85,12 @@ async function headlessInstall(store, appId, platform, installDir) {
             return { ok, lastLines };
         };
 
-        let activePlat = platform || 'windows';
+        const activePlat = platform || 'windows';
         writeProgress({ ...base, step: 'downloading', percent: 0, message: `Starting download (${activePlat})...` });
-        let { ok: dlOk, lastLines } = await runGogdlDownload(activePlat);
-
-        // Auto-retry with linux if windows platform isn't supported by gogdl's content system API
-        if (!dlOk && activePlat === 'windows' && lastLines.some(l => /doesn.t support content system/i.test(l))) {
-            activePlat = 'linux';
-            writeProgress({ ...base, step: 'downloading', percent: 0, message: 'Windows not available — retrying with Linux build...' });
-            ({ ok: dlOk, lastLines } = await runGogdlDownload(activePlat));
-        }
+        const { ok: dlOk, lastLines } = await runGogdlDownload(activePlat);
 
         try { fs.unlinkSync(authPath); } catch {}
         if (!dlOk) { writeProgress({ ...base, step: 'error', message: lastLines.slice(-2).join(' | ') || 'Download failed.', done: true }); return; }
-        platform = activePlat;
 
         const gameInfo = findGogInstallResult(dir, appId);
         if (!gameInfo) { writeProgress({ ...base, step: 'error', message: 'Install verification failed.', done: true }); return; }
