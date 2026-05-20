@@ -845,16 +845,26 @@ function switchImportTab(tab) {
 document.getElementById('tab-epic')?.addEventListener('click', () => switchImportTab('epic'));
 document.getElementById('tab-gog')?.addEventListener('click',  () => { switchImportTab('gog'); loadGogImportData(); });
 
-function openImportModal(tab = 'epic') {
+async function openImportModal(tab = 'epic') {
     modalImport.classList.add('active');
     switchImportTab(tab);
-    if (tab === 'epic') loadImportData();
-    if (tab === 'gog')  loadGogImportData();
+    if (tab === 'epic') await loadImportData();
+    if (tab === 'gog')  await loadGogImportData();
 }
 function closeImportModal() { modalImport.classList.remove('active'); }
 
-document.getElementById('btn-import-legendary')?.addEventListener('click', () => openImportModal('epic'));
-document.getElementById('btn-import-gog')?.addEventListener('click',       () => openImportModal('gog'));
+document.getElementById('btn-import-legendary')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-import-legendary');
+    btn.disabled = true; btn.textContent = 'Fetching...';
+    await openImportModal('epic');
+    btn.disabled = false; btn.textContent = 'Sync Epic';
+});
+document.getElementById('btn-import-gog')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-import-gog');
+    btn.disabled = true; btn.textContent = 'Fetching...';
+    await openImportModal('gog');
+    btn.disabled = false; btn.textContent = 'Sync GOG';
+});
 document.getElementById('btn-import-cancel')?.addEventListener('click', closeImportModal);
 document.getElementById('btn-gog-import-cancel')?.addEventListener('click', closeImportModal);
 modalImport?.addEventListener('click', e => { if (e.target === modalImport) closeImportModal(); });
@@ -887,8 +897,10 @@ async function loadImportData() {
     loginPanel.style.display = 'none';
     accountEl.textContent    = `✓ ${status.account}`;
     setStatus('Fetching installed Epic games...');
+    document.getElementById('epic-loading').style.display = 'block';
 
     const result = await window.api.legendaryListOwned();
+    document.getElementById('epic-loading').style.display = 'none';
     if (!result.ok || !result.games.length) {
         gamesPanel.style.display = 'none';
         emptyPanel.style.display = 'block';
@@ -1012,8 +1024,10 @@ async function loadGogImportData() {
     accountEl.textContent = `✓ ${s.username}`;
     setStatus('Fetching GOG library...');
     confirmBtn.style.display = 'none';
+    document.getElementById('gog-loading').style.display = 'block';
 
     const result = await window.api.gogListOwned();
+    document.getElementById('gog-loading').style.display = 'none';
     if (!result.ok || !result.games.length) {
         gamesPanel.style.display = 'none';
         emptyPanel.style.display = 'block';

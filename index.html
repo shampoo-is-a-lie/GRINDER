@@ -51,15 +51,23 @@
     #sidebar { width: 200px; flex-shrink: 0; background: var(--bg_panel);
                border-right: 1px solid var(--border_solid);
                display: flex; flex-direction: column; padding: 12px 8px; gap: 4px; }
-    .sidebar-logo { text-align: center; padding: 12px 0 20px; border-bottom: 1px solid var(--border_solid); margin-bottom: 8px; }
-    .sidebar-logo img { width: 48px; height: 48px; }
-    .sidebar-logo p { font-size: 9px; color: var(--text_dim); letter-spacing: 2px; margin-top: 6px; text-transform: uppercase; }
-
     .nav-btn { background: transparent; border: 1px solid transparent; color: var(--text_sec);
                text-align: left; padding: 9px 10px; font-size: 11px; font-weight: 900;
                letter-spacing: 1px; text-transform: uppercase; border-radius: 5px;
                cursor: pointer; font-family: 'Raleway', sans-serif; transition: 0.2s; }
     .nav-btn:hover, .nav-btn.active { background: var(--border_solid); color: var(--text_main); border-color: var(--accent); }
+
+    .sidebar-action-btn { background: transparent; border: 1px solid transparent; color: var(--text_dim);
+                          text-align: left; padding: 6px 10px 6px 16px; font-size: 10px; font-weight: 900;
+                          letter-spacing: 1px; text-transform: uppercase; border-radius: 5px;
+                          cursor: pointer; font-family: 'Raleway', sans-serif; transition: 0.2s; width: 100%; }
+    .sidebar-action-btn:hover { color: var(--text_main); border-color: var(--border_solid); background: rgba(255,255,255,0.04); }
+    .sidebar-action-btn:disabled { opacity: 0.5; cursor: default; }
+    .sidebar-action-btn.action-epic { color: #4a9eff; }
+    .sidebar-action-btn.action-epic:hover { background: rgba(0,120,242,0.1); border-color: #0078f2; }
+    .sidebar-action-btn.action-gog { color: #b07ee8; }
+    .sidebar-action-btn.action-gog:hover { background: rgba(155,89,217,0.1); border-color: #9b59d9; }
+    .sidebar-divider { height: 1px; background: var(--border_solid); margin: 6px 4px; }
 
     #sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border_solid); display: flex; flex-direction: column; gap: 4px; }
     .tool-status { font-size: 10px; font-weight: 700; padding: 4px 8px; display: flex; gap: 6px; align-items: center; color: var(--text_dim); }
@@ -188,8 +196,8 @@
   </style>
   <style>
     /* ── Font sizes ×1.25 override for CSS classes (titlebar excluded) ── */
-    .sidebar-logo p { font-size: 11px; }
     .nav-btn { font-size: 14px; }
+    .sidebar-action-btn { font-size: 12px; }
     .tool-status { font-size: 13px; }
     #games-toolbar input { font-size: 15px; }
     #games-toolbar button { font-size: 14px; }
@@ -320,6 +328,7 @@
           <button id="btn-epic-login" style="background:#0078f2; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:15px; letter-spacing:1px; cursor:pointer; width:100%; margin-bottom:10px;">Login to Epic Games</button>
           <div id="login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:14px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
         </div>
+        <div id="epic-loading" style="display:none; text-align:center; padding:30px 0; color:var(--text_dim); font-size:13px; font-weight:900; letter-spacing:2px;">FETCHING LIBRARY...</div>
         <div id="import-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
             <span id="import-account" style="font-size:14px; color:#66bb6a; font-weight:700;"></span>
@@ -345,6 +354,7 @@
           <button id="btn-gog-login" style="background:#9b59d9; border:none; color:#fff; padding:10px 20px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:15px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; width:100%; margin-bottom:10px;">Login to GOG</button>
           <div id="gog-login-output" style="display:none; background:rgba(0,0,0,0.5); border:1px solid var(--border_solid); border-radius:5px; padding:10px; font-family:monospace; font-size:14px; color:#66bb6a; white-space:pre-wrap; max-height:120px; overflow-y:auto; line-height:1.5;"></div>
         </div>
+        <div id="gog-loading" style="display:none; text-align:center; padding:30px 0; color:var(--text_dim); font-size:13px; font-weight:900; letter-spacing:2px;">FETCHING LIBRARY...</div>
         <div id="gog-games-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
             <span id="gog-account" style="font-size:14px; color:#66bb6a; font-weight:700;"></span>
@@ -486,12 +496,12 @@
   <div id="app">
     <!-- Sidebar -->
     <div id="sidebar">
-      <div class="sidebar-logo">
-        <img src="assets/icons/grinder_icon.svg" alt="GRINDER">
-        <p>Launch Engine</p>
-      </div>
-      <button class="nav-btn active" data-view="games">&#x25B6; Games</button>
-      <button class="nav-btn" data-view="settings">&#x2699; Settings</button>
+      <button class="nav-btn active" data-view="games">All Games</button>
+      <button class="sidebar-action-btn" id="btn-add-game">+ Add Game</button>
+      <button class="sidebar-action-btn action-epic" id="btn-import-legendary">Sync Epic</button>
+      <button class="sidebar-action-btn action-gog" id="btn-import-gog">Sync GOG</button>
+      <div class="sidebar-divider"></div>
+      <button class="nav-btn" data-view="settings">Settings</button>
 
       <div id="sidebar-footer">
         <div class="tool-status" id="status-legendary"><div class="dot"></div>legendary</div>
@@ -507,10 +517,7 @@
       <div id="view-games">
         <div id="games-toolbar">
           <input id="search-input" placeholder="Search games..." autocomplete="off">
-          <button id="btn-add-game">+ Add Game</button>
-          <button id="btn-import-legendary" style="background:rgba(0,120,242,0.15); border:1px solid #0078f2; color:#0078f2; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Import Epic Games library">Epic</button>
-          <button id="btn-import-gog"       style="background:rgba(155,89,217,0.15); border:1px solid #9b59d9; color:#9b59d9; padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Import GOG library">GOG</button>
-          <button id="btn-verify-installs" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">Verify</button>
+          <button id="btn-verify-installs" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">Refresh &amp; Check Size</button>
         </div>
         <div id="filter-bar"></div>
         <div id="games-list"></div>
@@ -519,7 +526,7 @@
       <!-- Settings view -->
       <div id="view-settings">
         <div class="settings-section">
-          <h3>&#x2699; Launch Engine</h3>
+          <h3>Launch Engine</h3>
           <div class="setting-row">
             <label>Default Proton Path</label>
             <input id="s-proton" placeholder="/home/user/.steam/root/steamapps/common/Proton - Experimental">
@@ -532,14 +539,14 @@
           </div>
         </div>
         <div class="settings-section">
-          <h3>&#x1F3AE; Epic Games (Legendary)</h3>
+          <h3>Epic Games (Legendary)</h3>
           <div id="s-legendary-status" style="font-size:15px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
           <button id="btn-s-epic-login" style="display:none; background:#0078f2; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1.5px; text-transform:uppercase;">Login to Epic</button>
           <button id="btn-s-epic-logout" style="display:none; background:rgba(198,40,40,0.12); border:1px solid #c62828; color:#ef5350; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1.5px; text-transform:uppercase;">Logout</button>
         </div>
 
         <div class="settings-section">
-          <h3>&#x1F7E3; GOG</h3>
+          <h3>GOG</h3>
           <div id="s-gog-status" style="font-size:15px; color:var(--text_sec); margin-bottom:10px;">Checking...</div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button id="btn-s-gog-login" style="display:none; background:#9b59d9; border:none; color:#fff; padding:8px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; letter-spacing:1px;">Login to GOG</button>
@@ -553,7 +560,7 @@
         </div>
 
         <div class="settings-section">
-          <h3>&#x1F9AA; Proton Versions</h3>
+          <h3>Proton Versions</h3>
           <div id="proton-list" style="margin-bottom:12px; display:flex; flex-direction:column; gap:6px; font-size:15px; color:var(--text_sec);">Not scanned yet.</div>
           <button class="btn-save-settings" id="btn-scan-proton" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_sec); margin-bottom:4px;">Scan Proton Versions</button>
           <p style="font-size:14px; color:var(--text_dim); margin-top:4px; line-height:1.6;">
@@ -561,7 +568,7 @@
           </p>
         </div>
         <div class="settings-section">
-          <h3>&#x1F9EA; External Tools</h3>
+          <h3>External Tools</h3>
           <div id="tools-info" style="font-size:15px; color: var(--text_sec); line-height: 1.7; margin-bottom: 14px;">Checking...</div>
           <div id="umu-install-wrap" style="display:none; flex-direction:column; gap:8px;">
             <button class="btn-save-settings" id="btn-install-umu" style="background: rgba(102,187,106,0.12); border: 1px solid #66bb6a; color: #66bb6a; align-self: flex-start;">Install umu-run</button>
