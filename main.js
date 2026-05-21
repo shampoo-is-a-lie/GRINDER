@@ -408,7 +408,7 @@ async function launchGame(gameId) {
 
     if (game.store === 'epic') {
         if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
-            spawn(umu, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+            spawn(umu, [launchExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
             return { ok: true, method: 'umu-run' };
         }
         const legendary = findLegendary();
@@ -421,6 +421,11 @@ async function launchGame(gameId) {
 
     if (!resolvedExe || !fs.existsSync(resolvedExe)) throw new Error(`Executable not found: ${resolvedExe || '(not set)'}`);
 
+    // .bat files must be launched via Wine's Z: drive Windows path — Proton/wine
+    // can't run .bat from a raw Linux path. Z: maps to the filesystem root.
+    const isBat = resolvedExe.toLowerCase().endsWith('.bat');
+    const launchExe = isBat ? ('Z:' + resolvedExe.replace(/\//g, '\\')) : resolvedExe;
+
     if (game.platform === 'linux') {
         try { fs.chmodSync(resolvedExe, '755'); } catch {}
         spawn(resolvedExe, [], { env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
@@ -428,21 +433,21 @@ async function launchGame(gameId) {
     }
 
     if (umu) {
-        spawn(umu, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
-        return { ok: true, method: 'umu-run' };
+        spawn(umu, [launchExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: isBat ? 'umu-run-bat' : 'umu-run' };
     }
 
     if (proton) {
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const protonBin = path.join(proton, 'proton');
         if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
-        spawn(protonBin, ['run', resolvedExe], { env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
-        return { ok: true, method: 'proton-direct' };
+        spawn(protonBin, ['run', launchExe], { env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: isBat ? 'proton-bat' : 'proton-direct' };
     }
 
     const wine = findWineCached();
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
-    spawn(wine, [resolvedExe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
+    spawn(wine, [launchExe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
 
