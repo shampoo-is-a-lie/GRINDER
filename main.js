@@ -385,6 +385,31 @@ async function launchGame(gameId) {
         return rel ? path.join(installPath, ...rel.replace(/\\/g, '/').split('/')) : '';
     })();
 
+    // Read arguments for the active task from goggame-*.info (GOG only).
+    // GOG stores launch arguments in playTasks — without them mods/configs don't load.
+    const gogTaskArgs = (() => {
+        if (game.store !== 'gog' || !installPath || !game.app_id) return [];
+        try {
+            const infoFile = path.join(installPath, `goggame-${game.app_id}.info`);
+            const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+            const activeRel = (game.launch_target || game.executable || '').replace(/\\/g, '/');
+            const task = (info.playTasks || []).find(t =>
+                t.type === 'FileTask' && t.path && t.path.replace(/\\/g, '/') === activeRel
+            );
+            if (!task?.arguments) return [];
+            // Simple shell-split that respects quoted tokens
+            const args = []; let cur = ''; let inQ = false; let q = '';
+            for (const ch of task.arguments.trim()) {
+                if (inQ) { if (ch === q) inQ = false; else cur += ch; }
+                else if (ch === '"' || ch === "'") { inQ = true; q = ch; }
+                else if (ch === ' ' || ch === '\t') { if (cur) { args.push(cur); cur = ''; } }
+                else cur += ch;
+            }
+            if (cur) args.push(cur);
+            return args;
+        } catch { return []; }
+    })();
+
     const umu = findUmu();
     const usingProton = !!(proton || umu);
 
@@ -408,7 +433,7 @@ async function launchGame(gameId) {
 
     if (game.store === 'epic') {
         if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
-            spawn(umu, [launchExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+            spawn(umu, [launchExe], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
             return { ok: true, method: 'umu-run' };
         }
         const legendary = findLegendary();
@@ -428,12 +453,12 @@ async function launchGame(gameId) {
 
     if (game.platform === 'linux') {
         try { fs.chmodSync(resolvedExe, '755'); } catch {}
-        spawn(resolvedExe, [], { env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
+        spawn(resolvedExe, [], { cwd: installPath || undefined, env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'native' };
     }
 
     if (umu) {
-        spawn(umu, [launchExe], { env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        spawn(umu, [launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: isBat ? 'umu-run-bat' : 'umu-run' };
     }
 
@@ -441,13 +466,13 @@ async function launchGame(gameId) {
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const protonBin = path.join(proton, 'proton');
         if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
-        spawn(protonBin, ['run', launchExe], { env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
+        spawn(protonBin, ['run', launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: isBat ? 'proton-bat' : 'proton-direct' };
     }
 
     const wine = findWineCached();
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
-    spawn(wine, [launchExe], { env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
+    spawn(wine, [launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
 
