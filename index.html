@@ -398,6 +398,11 @@
       </div>
       <div class="modal-row"><label>Executable (relative to install path)</label><input id="edit-exe" placeholder="Game.exe"></div>
       <div class="modal-row">
+        <label>Additional Arguments</label>
+        <input id="edit-launch-args" placeholder="-windowed -nosound +set com_allowConsole 1">
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Appended after any arguments declared in the game's play tasks.</span>
+      </div>
+      <div class="modal-row">
         <label>Wine Prefix (leave blank for default)</label>
         <div style="display:flex; gap:8px; align-items:center;">
           <input id="edit-prefix" placeholder="~/.local/share/grinder/prefixes/game-id" style="flex:1;">

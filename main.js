@@ -227,6 +227,7 @@ function initDb() {
     try { db.prepare("ALTER TABLE games ADD COLUMN use_battleye INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN use_eac INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN launch_target TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN launch_args TEXT").run(); } catch(e) {}
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -410,6 +411,21 @@ async function launchGame(gameId) {
         } catch { return []; }
     })();
 
+    // User-defined additional arguments — appended after auto-detected playTask args
+    const userArgs = (() => {
+        if (!game.launch_args?.trim()) return [];
+        const args = []; let cur = ''; let inQ = false; let q = '';
+        for (const ch of game.launch_args.trim()) {
+            if (inQ) { if (ch === q) inQ = false; else cur += ch; }
+            else if (ch === '"' || ch === "'") { inQ = true; q = ch; }
+            else if (ch === ' ' || ch === '\t') { if (cur) { args.push(cur); cur = ''; } }
+            else cur += ch;
+        }
+        if (cur) args.push(cur);
+        return args;
+    })();
+    const allArgs = [...gogTaskArgs, ...userArgs];
+
     const umu = findUmu();
     const usingProton = !!(proton || umu);
 
@@ -433,7 +449,7 @@ async function launchGame(gameId) {
 
     if (game.store === 'epic') {
         if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
-            spawn(umu, [launchExe], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+            spawn(umu, [launchExe, ...userArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
             return { ok: true, method: 'umu-run' };
         }
         const legendary = findLegendary();
@@ -453,12 +469,12 @@ async function launchGame(gameId) {
 
     if (game.platform === 'linux') {
         try { fs.chmodSync(resolvedExe, '755'); } catch {}
-        spawn(resolvedExe, [], { cwd: installPath || undefined, env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
+        spawn(resolvedExe, [...userArgs], { cwd: installPath || undefined, env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: 'native' };
     }
 
     if (umu) {
-        spawn(umu, [launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        spawn(umu, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: isBat ? 'umu-run-bat' : 'umu-run' };
     }
 
@@ -466,13 +482,13 @@ async function launchGame(gameId) {
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const protonBin = path.join(proton, 'proton');
         if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
-        spawn(protonBin, ['run', launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
+        spawn(protonBin, ['run', launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
         return { ok: true, method: isBat ? 'proton-bat' : 'proton-direct' };
     }
 
     const wine = findWineCached();
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
-    spawn(wine, [launchExe, ...gogTaskArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
+    spawn(wine, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
     return { ok: true, method: 'wine' };
 }
 
@@ -572,7 +588,7 @@ ipcMain.handle('add-game', (_, data) => {
 });
 
 ipcMain.handle('update-game', (_, id, data) => {
-    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks','use_esync','use_fsync','use_dxvk_nvapi','use_battleye','use_eac','launch_target'];
+    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks','use_esync','use_fsync','use_dxvk_nvapi','use_battleye','use_eac','launch_target','launch_args'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
     if (!entries.length) return false;
     const set = entries.map(([k]) => `${k}=?`).join(', ');

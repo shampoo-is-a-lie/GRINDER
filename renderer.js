@@ -424,6 +424,7 @@ function openModal(game = null) {
     document.getElementById('edit-appid').value        = game?.app_id       || '';
     document.getElementById('edit-install-path').value = game?.install_path || '';
     document.getElementById('edit-exe').value          = game?.executable   || '';
+    document.getElementById('edit-launch-args').value = game?.launch_args  || '';
     document.getElementById('edit-prefix').value       = game?.prefix_path  || '';
     populateProtonDropdown(protonVersions, game?.proton_path || '');
     document.getElementById('edit-notes').value        = game?.notes        || '';
@@ -488,6 +489,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
         use_battleye:  document.getElementById('edit-battleye').checked  ? 1 : 0,
         use_eac:          document.getElementById('edit-eac').checked            ? 1 : 0,
         launch_target:    document.getElementById('edit-launch-target').value      || null,
+        launch_args:      document.getElementById('edit-launch-args').value.trim() || null,
         installed:     document.getElementById('edit-install-path').value.trim() ? 1 : 0,
     };
 
