@@ -1,7 +1,7 @@
 {
   "name": "grinder",
   "version": "0.1.0",
-  "description": "Cafe Neurotico GRINDER — Game launcher and install engine",
+  "description": "Cafe Neurotico GRINDER — The robot barista. Roasts, grinds, and serves your GOG & Epic games — downloading, configuring Proton, and pulling the perfect shot every time.",
   "main": "main.js",
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
