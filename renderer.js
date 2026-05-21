@@ -1220,14 +1220,20 @@ function renderProtonList(versions) {
         return;
     }
     const defaultPath = document.getElementById('s-proton').value;
-    container.innerHTML = versions.map(v => `
+    container.innerHTML = versions.map(v => {
+        const canDelete = v.path.includes('compatibilitytools.d');
+        const delBtn = canDelete
+            ? `<button onclick="deleteProton('${v.path.replace(/'/g, "\\'")}')" style="font-size:10px;font-weight:900;padding:3px 8px;border:1px solid #c62828;background:rgba(198,40,40,0.10);color:#ef5350;border-radius:3px;cursor:pointer;font-family:Raleway,sans-serif;" title="Uninstall this Proton version">Delete</button>`
+            : '';
+        return `
         <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid var(--border_solid);">
             <span style="font-size:10px;font-weight:900;color:var(--accent);min-width:80px;">${TYPE_LABEL[v.type] ?? v.type}</span>
             <span style="flex:1;font-size:12px;color:var(--text_main);">${v.name}</span>
-            <span style="font-size:10px;color:var(--text_dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;" title="${v.path}">${v.path}</span>
+            <span style="font-size:10px;color:var(--text_dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;" title="${v.path}">${v.path}</span>
             <button onclick="setDefaultProton('${v.path.replace(/'/g, "\\'")}')" style="font-size:10px;font-weight:900;padding:3px 8px;border:1px solid var(--border_solid);background:transparent;color:var(--text_sec);border-radius:3px;cursor:pointer;font-family:Raleway,sans-serif;${v.path===defaultPath?'border-color:var(--accent);color:var(--accent);':''}">${v.path===defaultPath?'✓ Default':'Set Default'}</button>
-        </div>
-    `).join('');
+            ${delBtn}
+        </div>`;
+    }).join('');
 }
 
 window.setDefaultProton = async (p) => {
@@ -1235,6 +1241,20 @@ window.setDefaultProton = async (p) => {
     await window.api.setSetting('default_proton_path', p);
     renderProtonList(protonVersions);
     setStatus(`Default Proton set: ${p.split('/').pop()}`);
+};
+
+window.deleteProton = async (p) => {
+    const name = p.split('/').pop();
+    const isDefault = document.getElementById('s-proton').value === p;
+    const warning = isDefault ? `<br><br><strong style="color:#f57c00">⚠ This is your current default Proton. You'll need to set another one.</strong>` : '';
+    const ok = await showConfirm('Uninstall Proton', `Delete <strong>${name}</strong> from disk?${warning}`);
+    if (!ok) return;
+    const result = await window.api.deleteProton(p);
+    if (!result.ok) { showAlert('Delete failed', result.error); return; }
+    if (isDefault) { document.getElementById('s-proton').value = ''; await window.api.setSetting('default_proton_path', ''); }
+    protonVersions = await window.api.scanProton();
+    renderProtonList(protonVersions);
+    setStatus(`${name} uninstalled.`);
 };
 
 document.getElementById('btn-scan-proton').addEventListener('click', async () => {

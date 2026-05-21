@@ -82,7 +82,8 @@ contextBridge.exposeInMainWorld('api', {
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
     runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),
 
-    // GE-Proton downloader
+    // GE-Proton downloader / manager
+    deleteProton:           (dir)       => ipcRenderer.invoke('delete-proton', dir),
     getProtonReleases:      ()          => ipcRenderer.invoke('get-proton-releases'),
     downloadProton:         (url, tag)  => ipcRenderer.invoke('download-proton', url, tag),
     cancelProtonDownload:   ()          => ipcRenderer.invoke('cancel-proton-download'),
