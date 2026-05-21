@@ -819,14 +819,15 @@ ipcMain.handle('get-config-dir', () => configDir);
 ipcMain.handle('scan-proton', () => scanProtonVersions());
 
 ipcMain.handle('delete-proton', (_, dirPath) => {
-    const resolved = expandTilde(dirPath);
-    // Safety: only delete from compatibilitytools.d directories, never from steamapps/common
-    const isSafe = [
+    const resolved = (() => { try { return fs.realpathSync(expandTilde(dirPath)); } catch { return expandTilde(dirPath); } })();
+    // Safety: only delete from compatibilitytools.d — resolve symlinks on base dirs too
+    const safeBases = [
         path.join(HOME, '.steam', 'root', 'compatibilitytools.d'),
         path.join(HOME, '.steam', 'steam', 'compatibilitytools.d'),
         path.join(HOME, '.local', 'share', 'Steam', 'compatibilitytools.d'),
         path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', 'data', 'Steam', 'compatibilitytools.d'),
-    ].some(base => resolved.startsWith(base + path.sep));
+    ].map(b => { try { return fs.realpathSync(b); } catch { return b; } });
+    const isSafe = safeBases.some(base => resolved.startsWith(base + path.sep));
     if (!isSafe) return { ok: false, error: 'Refusing to delete — path is not inside compatibilitytools.d.' };
     try {
         fs.rmSync(resolved, { recursive: true, force: true });
