@@ -154,6 +154,46 @@ async function checkTools() {
 }
 checkTools();
 
+// ── Welcome screen ────────────────────────────────────────────────────────────
+const _welcomeModal = document.getElementById('modal-welcome');
+
+async function showWelcome() {
+    // Populate tools status in welcome modal
+    const tools = await window.api.checkTools();
+    const wlcInfo = document.getElementById('wlc-tools-info');
+    if (wlcInfo) {
+        const row = (label, found, note) => `
+            <div style="display:flex; align-items:baseline; gap:8px;">
+                <span style="font-weight:900; color:var(--text_main); min-width:90px;">${label}</span>
+                ${found
+                    ? `<span style="color:#66bb6a;">✓ found</span>`
+                    : `<span style="color:var(--text_dim);">${note}</span>`}
+            </div>`;
+        wlcInfo.innerHTML = [
+            row('legendary', tools.legendary, '✗ not found — required for Epic Games. Bundled with GRINDER or install via package manager.'),
+            row('gogdl',     tools.gogdl,     '✗ not found — required for GOG games. Place gogdl binary next to GRINDER.AppImage.'),
+            row('umu-run',   tools.umu,       '⚠ not found — recommended for best compatibility. Install via Settings → External Tools.'),
+            row('wine',      tools.wine,      '— not found (optional — only needed as last resort if no Proton is set)'),
+        ].join('');
+    }
+    _welcomeModal.classList.add('active');
+}
+
+function closeWelcome() {
+    _welcomeModal.classList.remove('active');
+    if (document.getElementById('wlc-dont-show')?.checked) {
+        window.api.setSetting('welcome_shown', '1');
+    }
+}
+
+document.getElementById('btn-wlc-close')?.addEventListener('click', closeWelcome);
+_welcomeModal?.addEventListener('click', e => { if (e.target === _welcomeModal) closeWelcome(); });
+
+document.getElementById('btn-show-welcome')?.addEventListener('click', () => showWelcome());
+
+// Show on launch unless user opted out
+window.api.getSetting('welcome_shown').then(shown => { if (!shown) showWelcome(); });
+
 // ── Games list ────────────────────────────────────────────────────────────────
 function storeBadge(store) {
     const map = { epic: 'badge-epic', gog: 'badge-gog', custom: 'badge-custom' };

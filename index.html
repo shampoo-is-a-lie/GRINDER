@@ -579,6 +579,10 @@
           </div>
         </div>
         <button class="btn-save-settings" id="btn-save-settings">Save Settings</button>
+        <div class="settings-section" style="margin-top:28px;">
+          <h3>About</h3>
+          <button class="btn-save-settings" id="btn-show-welcome" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_sec);">Show Welcome Screen</button>
+        </div>
       </div>
     </div>
   </div>
@@ -586,6 +590,49 @@
   <div id="statusbar">
     <span id="status-msg">Ready.</span>
     <span id="status-count"></span>
+  </div>
+
+  <!-- Welcome Screen -->
+  <div id="modal-welcome" class="modal-overlay" style="z-index:9000; align-items:center; justify-content:center;">
+    <div style="background:var(--bg_menu); border:2px solid var(--border_solid); border-radius:16px; width:600px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,0.9);">
+      <!-- Header -->
+      <div style="padding:28px 32px 20px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
+        <div style="font-size:10px; font-weight:900; letter-spacing:3px; color:var(--text_dim); margin-bottom:6px; text-transform:uppercase;">Cafe Neurotico</div>
+        <div style="font-size:26px; font-weight:900; color:var(--text_main); letter-spacing:1px;">GRINDER</div>
+        <div style="font-size:12px; color:var(--text_dim); letter-spacing:2px; margin-top:2px; text-transform:uppercase;">Launch Engine</div>
+      </div>
+      <!-- Body -->
+      <div style="padding:24px 32px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:20px;">
+        <p style="font-size:15px; color:var(--text_sec); line-height:1.75; margin:0;">
+          Your dedicated installer and launcher for <strong style="color:var(--text_main)">GOG</strong> and <strong style="color:var(--text_main)">Epic</strong> games on Linux. GRINDER handles the full pipeline — downloading, installing, configuring Proton, managing Wine prefixes, installing compatibility files, and reading each game's official launch arguments. Fully integrated with <strong style="color:var(--text_main)">CNGM</strong> and <strong style="color:var(--text_main)">CREMA</strong>.
+        </p>
+
+        <!-- Requirements -->
+        <div>
+          <div style="font-size:11px; font-weight:900; letter-spacing:2px; color:var(--accent); margin-bottom:12px; text-transform:uppercase;">Requirements</div>
+          <div id="wlc-tools-info" style="display:flex; flex-direction:column; gap:10px; font-size:14px; line-height:1.6;"></div>
+        </div>
+
+        <!-- Quick tips -->
+        <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border_solid); border-radius:8px; padding:16px 18px;">
+          <div style="font-size:11px; font-weight:900; letter-spacing:2px; color:var(--text_dim); margin-bottom:10px; text-transform:uppercase;">Getting Started</div>
+          <ul style="margin:0; padding-left:18px; color:var(--text_sec); font-size:14px; line-height:1.9;">
+            <li>Place <code style="font-size:13px; background:rgba(0,0,0,0.35); padding:1px 5px; border-radius:3px;">GRINDER.AppImage</code> in the same folder as <code style="font-size:13px; background:rgba(0,0,0,0.35); padding:1px 5px; border-radius:3px;">CNGM.AppImage</code></li>
+            <li>Install <strong style="color:var(--text_main)">GE-Proton</strong> via <strong style="color:var(--text_main)">ProtonUp-Qt</strong>, then set it in Settings → Default Proton Path</li>
+            <li>Log in to <strong style="color:var(--text_main)">GOG</strong> or <strong style="color:var(--text_main)">Epic</strong> via the Sync buttons in the sidebar</li>
+            <li><strong style="color:var(--text_main)">umu-run</strong> is recommended for best compatibility — install it from Settings if missing</li>
+          </ul>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div style="padding:16px 32px 20px; border-top:1px solid var(--border_solid); flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text_dim); cursor:pointer; user-select:none;">
+          <input type="checkbox" id="wlc-dont-show" style="accent-color:var(--accent); width:14px; height:14px;">
+          Don't show this again
+        </label>
+        <button id="btn-wlc-close" class="btn-confirm" style="padding:10px 28px; font-size:14px;">LET'S GO</button>
+      </div>
+    </div>
   </div>
 
   <script src="renderer.js"></script>
