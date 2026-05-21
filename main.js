@@ -818,6 +818,94 @@ ipcMain.handle('get-config-dir', () => configDir);
 // Proton
 ipcMain.handle('scan-proton', () => scanProtonVersions());
 
+// ── GE-Proton downloader ───────────────────────────────────────────────────────
+let _protonDlReq = null;
+
+ipcMain.handle('get-proton-releases', async () => {
+    try {
+        const res = await fetch('https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=15', {
+            headers: { 'User-Agent': 'GRINDER/1.0' },
+        });
+        if (!res.ok) return { ok: false, error: `GitHub API ${res.status}` };
+        const releases = await res.json();
+        return {
+            ok: true,
+            releases: releases
+                .map(r => {
+                    const asset = r.assets.find(a => a.name.endsWith('.tar.gz'));
+                    if (!asset) return null;
+                    return {
+                        tag:  r.tag_name,
+                        name: r.name || r.tag_name,
+                        date: r.published_at.split('T')[0],
+                        size: asset.size,
+                        url:  asset.browser_download_url,
+                    };
+                })
+                .filter(Boolean),
+        };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('download-proton', async (event, url, tag) => {
+    const send = d => { try { event.sender.send('proton-dl-progress', d); } catch {} };
+
+    // Install to first available compatibilitytools.d that exists (or create it)
+    const ctDirs = [
+        path.join(HOME, '.steam', 'root', 'compatibilitytools.d'),
+        path.join(HOME, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+        path.join(HOME, '.var', 'app', 'com.valvesoftware.Steam', 'data', 'Steam', 'compatibilitytools.d'),
+    ];
+    const installBase = ctDirs.find(d => fs.existsSync(d)) || ctDirs[0];
+    try { fs.mkdirSync(installBase, { recursive: true }); } catch {}
+
+    const tmpFile = path.join(configDir, `${tag}.tar.gz`);
+    send({ phase: 'downloading', percent: 0, message: `Downloading ${tag}...` });
+
+    const dlOk = await new Promise(resolve => {
+        function get(dlUrl, redirectCount = 0) {
+            if (redirectCount > 5) { resolve(false); return; }
+            const protocol = dlUrl.startsWith('https') ? require('https') : require('http');
+            _protonDlReq = protocol.get(dlUrl, { headers: { 'User-Agent': 'GRINDER/1.0' } }, res => {
+                if (res.statusCode === 301 || res.statusCode === 302) { get(res.headers.location, redirectCount + 1); return; }
+                if (res.statusCode !== 200) { resolve(false); return; }
+                const total = parseInt(res.headers['content-length'] || '0', 10);
+                let downloaded = 0;
+                const out = fs.createWriteStream(tmpFile);
+                res.on('data', chunk => {
+                    downloaded += chunk.length;
+                    if (total) send({ phase: 'downloading', percent: Math.round(downloaded / total * 100), message: `${(downloaded/1e6).toFixed(0)} MB / ${(total/1e6).toFixed(0)} MB` });
+                });
+                res.pipe(out);
+                out.on('finish', () => resolve(true));
+                out.on('error', () => resolve(false));
+            });
+            _protonDlReq.on('error', () => resolve(false));
+        }
+        get(url);
+    });
+
+    _protonDlReq = null;
+    if (!dlOk) { try { fs.unlinkSync(tmpFile); } catch {} return { ok: false, error: 'Download failed or cancelled.' }; }
+
+    send({ phase: 'extracting', percent: 100, message: `Extracting ${tag}...` });
+    const extractOk = await new Promise(resolve => {
+        const proc = spawn('tar', ['-xzf', tmpFile, '-C', installBase], { stdio: 'ignore' });
+        proc.on('close', code => resolve(code === 0));
+        proc.on('error', () => resolve(false));
+    });
+    try { fs.unlinkSync(tmpFile); } catch {}
+    if (!extractOk) return { ok: false, error: 'Extraction failed.' };
+
+    send({ phase: 'done', percent: 100, message: `${tag} installed to ${installBase}` });
+    return { ok: true, installBase };
+});
+
+ipcMain.handle('cancel-proton-download', () => {
+    if (_protonDlReq) { try { _protonDlReq.destroy(); } catch {} _protonDlReq = null; }
+    return { ok: true };
+});
+
 // ── Legendary / Epic ──────────────────────────────────────────────────────────
 
 function runLegendary(args) {

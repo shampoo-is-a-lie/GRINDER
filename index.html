@@ -568,6 +568,28 @@
           </p>
         </div>
         <div class="settings-section">
+          <h3>Install GE-Proton</h3>
+          <p style="font-size:14px; color:var(--text_dim); margin-bottom:12px; line-height:1.6;">Download and install GE-Proton directly from the <strong style="color:var(--text_sec)">GloriousEggroll</strong> GitHub releases. Installs to <code style="font-size:13px;background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">compatibilitytools.d</code> and is immediately available in the Proton scanner above.</p>
+          <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+            <select id="proton-dl-select" style="flex:1; background:var(--bg); border:1px solid var(--border_solid); color:var(--text_main); padding:7px 10px; border-radius:5px; font-family:Raleway,sans-serif; font-size:14px; cursor:pointer;">
+              <option value="">— Load versions —</option>
+            </select>
+            <button class="btn-save-settings" id="btn-proton-dl-load" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_sec); white-space:nowrap;">Fetch Versions</button>
+          </div>
+          <button class="btn-save-settings" id="btn-proton-dl-install" style="display:none; background:rgba(102,187,106,0.12); border:1px solid #66bb6a; color:#66bb6a; margin-bottom:8px;">Install Selected Version</button>
+          <div id="proton-dl-progress-wrap" style="display:none; flex-direction:column; gap:6px;">
+            <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border_solid); border-radius:10px; overflow:hidden; height:8px;">
+              <div id="proton-dl-bar" style="height:100%; background:var(--accent); width:0%; transition:width 0.4s ease; border-radius:10px;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="proton-dl-msg" style="font-size:13px; color:var(--text_sec); font-family:monospace;"></span>
+              <button id="btn-proton-dl-cancel" style="font-size:12px; padding:3px 10px; border:1px solid var(--border_solid); background:transparent; color:var(--text_dim); border-radius:3px; cursor:pointer; font-family:Raleway,sans-serif;">Cancel</button>
+            </div>
+          </div>
+          <div id="proton-dl-status" style="font-size:13px; min-height:16px; margin-top:4px;"></div>
+        </div>
+
+        <div class="settings-section">
           <h3>External Tools</h3>
           <div id="tools-info" style="font-size:15px; color: var(--text_sec); line-height: 1.7; margin-bottom: 14px;">Checking...</div>
           <div id="umu-install-wrap" style="display:none; flex-direction:column; gap:8px;">
@@ -618,7 +640,7 @@
           <div style="font-size:11px; font-weight:900; letter-spacing:2px; color:var(--text_dim); margin-bottom:10px; text-transform:uppercase;">Getting Started</div>
           <ul style="margin:0; padding-left:18px; color:var(--text_sec); font-size:14px; line-height:1.9;">
             <li>Place <code style="font-size:13px; background:rgba(0,0,0,0.35); padding:1px 5px; border-radius:3px;">GRINDER.AppImage</code> in the same folder as <code style="font-size:13px; background:rgba(0,0,0,0.35); padding:1px 5px; border-radius:3px;">CNGM.AppImage</code></li>
-            <li>Install <strong style="color:var(--text_main)">GE-Proton</strong> via <strong style="color:var(--text_main)">ProtonUp-Qt</strong>, then set it in Settings → Default Proton Path</li>
+            <li>Install <strong style="color:var(--text_main)">GE-Proton</strong> directly from Settings → Install GE-Proton (no external tools needed)</li>
             <li>Log in to <strong style="color:var(--text_main)">GOG</strong> or <strong style="color:var(--text_main)">Epic</strong> via the Sync buttons in the sidebar</li>
             <li><strong style="color:var(--text_main)">umu-run</strong> is recommended for best compatibility — install it from Settings if missing</li>
           </ul>

@@ -81,4 +81,10 @@ contextBridge.exposeInMainWorld('api', {
     // Play tasks + run-exe
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
     runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),
+
+    // GE-Proton downloader
+    getProtonReleases:      ()          => ipcRenderer.invoke('get-proton-releases'),
+    downloadProton:         (url, tag)  => ipcRenderer.invoke('download-proton', url, tag),
+    cancelProtonDownload:   ()          => ipcRenderer.invoke('cancel-proton-download'),
+    onProtonDlProgress:     (cb)        => ipcRenderer.on('proton-dl-progress', (_, d) => cb(d)),
 });

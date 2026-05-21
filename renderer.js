@@ -1266,6 +1266,79 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     setStatus('Settings saved.');
 });
 
+// ── GE-Proton downloader ──────────────────────────────────────────────────────
+let _protonReleases = [];
+
+document.getElementById('btn-proton-dl-load')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-proton-dl-load');
+    const sel = document.getElementById('proton-dl-select');
+    const status = document.getElementById('proton-dl-status');
+    btn.disabled = true; btn.textContent = 'Loading...';
+    const res = await window.api.getProtonReleases();
+    btn.disabled = false; btn.textContent = 'Fetch Versions';
+    if (!res.ok) { status.style.color = '#ef5350'; status.textContent = `Error: ${res.error}`; return; }
+    _protonReleases = res.releases;
+    sel.innerHTML = '<option value="">— Select a version —</option>' +
+        _protonReleases.map(r => `<option value="${r.url}" data-tag="${r.tag}">${r.tag}  (${r.date})  —  ${(r.size/1e6).toFixed(0)} MB</option>`).join('');
+    document.getElementById('btn-proton-dl-install').style.display = '';
+    status.textContent = `${_protonReleases.length} versions available.`;
+    status.style.color = 'var(--text_dim)';
+});
+
+document.getElementById('btn-proton-dl-install')?.addEventListener('click', async () => {
+    const sel    = document.getElementById('proton-dl-select');
+    const status = document.getElementById('proton-dl-status');
+    const wrap   = document.getElementById('proton-dl-progress-wrap');
+    const bar    = document.getElementById('proton-dl-bar');
+    const msg    = document.getElementById('proton-dl-msg');
+    const installBtn = document.getElementById('btn-proton-dl-install');
+    if (!sel.value) { status.style.color = '#f57c00'; status.textContent = 'Select a version first.'; return; }
+    const tag = sel.options[sel.selectedIndex].dataset.tag;
+    installBtn.style.display = 'none';
+    wrap.style.display = 'flex';
+    bar.style.width = '0%';
+    msg.textContent = 'Starting...';
+    status.textContent = '';
+
+    window.api.onProtonDlProgress(d => {
+        bar.style.width = (d.percent || 0) + '%';
+        msg.textContent = d.message || '';
+        if (d.phase === 'done') {
+            status.style.color = '#66bb6a';
+            status.textContent = `✓ ${tag} installed. Click "Scan Proton Versions" to pick it up.`;
+            wrap.style.display = 'none';
+            installBtn.style.display = '';
+        }
+        if (d.phase === 'error') {
+            status.style.color = '#ef5350';
+            status.textContent = `✗ ${d.message}`;
+            wrap.style.display = 'none';
+            installBtn.style.display = '';
+        }
+    });
+
+    const result = await window.api.downloadProton(sel.value, tag);
+    if (!result.ok && result.error !== 'Download failed or cancelled.') {
+        wrap.style.display = 'none';
+        installBtn.style.display = '';
+        status.style.color = '#ef5350';
+        status.textContent = `✗ ${result.error}`;
+    }
+    if (result.ok) {
+        // Auto-scan so the new version appears immediately
+        protonVersions = await window.api.scanProton();
+        renderProtonList(protonVersions);
+    }
+});
+
+document.getElementById('btn-proton-dl-cancel')?.addEventListener('click', async () => {
+    await window.api.cancelProtonDownload();
+    document.getElementById('proton-dl-progress-wrap').style.display = 'none';
+    document.getElementById('btn-proton-dl-install').style.display = '';
+    document.getElementById('proton-dl-status').style.color = 'var(--text_dim)';
+    document.getElementById('proton-dl-status').textContent = 'Cancelled.';
+});
+
 // ── Confirm modal ─────────────────────────────────────────────────────────────
 function showConfirm(title, bodyHtml) {
     return new Promise(resolve => {
