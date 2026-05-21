@@ -823,11 +823,20 @@ let _protonDlReq = null;
 
 ipcMain.handle('get-proton-releases', async () => {
     try {
-        const res = await fetch('https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=15', {
-            headers: { 'User-Agent': 'GRINDER/1.0' },
+        const releases = await new Promise((resolve, reject) => {
+            require('https').get(
+                'https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=15',
+                { headers: { 'User-Agent': 'GRINDER/1.0' } },
+                res => {
+                    let data = '';
+                    res.on('data', d => data += d);
+                    res.on('end', () => {
+                        try { resolve(JSON.parse(data)); }
+                        catch (e) { reject(new Error('Invalid JSON from GitHub API')); }
+                    });
+                }
+            ).on('error', reject);
         });
-        if (!res.ok) return { ok: false, error: `GitHub API ${res.status}` };
-        const releases = await res.json();
         return {
             ok: true,
             releases: releases
