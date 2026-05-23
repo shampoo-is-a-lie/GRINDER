@@ -564,6 +564,8 @@ if (cliMode) {
             if (si !== -1 && args[si + 1]) win?.webContents.send('cli-search', args.slice(si + 1).join(' '));
             const pi = args.indexOf('setup');
             if (pi !== -1 && args[pi + 1]) win?.webContents.send('cli-setup', args[pi + 1]);
+            if (args.indexOf('sync-gog')  !== -1) win?.webContents.send('cli-sync', 'gog');
+            if (args.indexOf('sync-epic') !== -1) win?.webContents.send('cli-sync', 'epic');
         });
         app.whenReady().then(() => {
             initDb();

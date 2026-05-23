@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('api', {
     onWinetricksProgress: (cb) => ipcRenderer.on('winetricks-progress', (_, d) => cb(d)),
     onRedistProgress:     (cb) => ipcRenderer.on('redist-progress',     (_, d) => cb(d)),
     onCliSetup:           (cb) => ipcRenderer.on('cli-setup', (_, id) => cb(id)),
+    onCliSync:            (cb) => ipcRenderer.on('cli-sync',  (_, tab) => cb(tab)),
 
     // Play tasks + run-exe
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),

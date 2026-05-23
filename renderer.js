@@ -2034,6 +2034,8 @@ window.api.onCliSetup(id => {
     }
 });
 
+window.api.onCliSync(tab => openImportModal(tab));
+
 window.api.onCliSearch(term => {
     const input = document.getElementById('search-input');
     if (!input) return;
