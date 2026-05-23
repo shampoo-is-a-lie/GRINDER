@@ -131,6 +131,8 @@
     .btn-edit:hover      { border-color: var(--accent) !important; color: var(--text_main); }
     .btn-delete, .btn-uninstall { background: transparent; color: #ef5350; border: 1px solid rgba(239,83,80,0.3) !important; }
     .btn-delete:hover, .btn-uninstall:hover { background: rgba(239,83,80,0.1); }
+    .btn-see-log { background: transparent; color: var(--accent); border: 1px solid var(--border_solid) !important; }
+    .btn-see-log:hover { background: rgba(255,255,255,0.06); color: var(--text_main); }
 
     #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text_dim); }
     #empty-state p { font-size: 13px; letter-spacing: 1px; }
@@ -251,7 +253,10 @@
 
       <!-- Header -->
       <div style="padding:20px 24px 16px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
-        <h3 id="install-modal-title" style="margin:0; font-size:16px; font-weight:900; color:var(--accent); letter-spacing:2px; text-transform:uppercase;">Install Game</h3>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h3 id="install-modal-title" style="margin:0; font-size:16px; font-weight:900; color:var(--accent); letter-spacing:2px; text-transform:uppercase;">Install Game</h3>
+          <span id="install-queue-badge" style="display:none; font-size:9px; font-weight:900; color:var(--text_dim); background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); border-radius:3px; padding:2px 7px; letter-spacing:1.5px;"></span>
+        </div>
         <p id="install-modal-subtitle" style="margin:6px 0 0; font-size:15px; color:var(--text_sec);"></p>
       </div>
 
@@ -397,6 +402,16 @@
         </div>
       </div>
       <div class="modal-row"><label>Executable (relative to install path)</label><input id="edit-exe" placeholder="Game.exe"></div>
+      <div class="modal-row" id="edit-custom-exe-row">
+        <label class="toggle-row" style="cursor:pointer; user-select:none;">
+          <input type="checkbox" id="edit-custom-exe-enabled">
+          <span>Custom executable <span style="font-size:11px; color:var(--text_dim); font-weight:400;">(overrides all other executable settings when set)</span></span>
+        </label>
+        <div id="edit-custom-exe-fields" style="display:none; gap:8px; align-items:center; margin-top:6px;">
+          <input id="edit-custom-exe" placeholder="/full/path/to/executable" style="flex:1;">
+          <button id="btn-browse-custom-exe" class="btn-cancel" style="padding:8px 12px; font-size:12px; white-space:nowrap;">Browse</button>
+        </div>
+      </div>
       <div class="modal-row">
         <label>Additional Arguments</label>
         <input id="edit-launch-args" placeholder="-windowed -nosound +set com_allowConsole 1">
@@ -502,13 +517,31 @@
     <!-- Sidebar -->
     <div id="sidebar">
       <button class="nav-btn active" data-view="games">All Games</button>
-      <button class="sidebar-action-btn" id="btn-add-game">+ Add Game</button>
+      <button class="sidebar-action-btn" id="btn-add-game-folder" style="color:var(--text_sec);">+ Add Game Folder</button>
+      <button class="sidebar-action-btn" id="btn-add-game">+ Add Custom Game</button>
       <button class="sidebar-action-btn action-epic" id="btn-import-legendary">Sync Epic</button>
       <button class="sidebar-action-btn action-gog" id="btn-import-gog">Sync GOG</button>
       <div class="sidebar-divider"></div>
       <button class="nav-btn" data-view="settings">Settings</button>
 
       <div id="sidebar-footer">
+
+        <!-- Mini install progress widget — visible when modal is minimized -->
+        <div id="install-mini" style="display:none; flex-direction:column; gap:5px; padding:4px 4px 10px; margin-bottom:2px; cursor:pointer; border-bottom:1px solid var(--border_solid);" title="Click to restore install window">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+            <span id="mini-game-name" style="font-size:10px; font-weight:900; color:var(--text_main); letter-spacing:0.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;"></span>
+            <span id="mini-queue-count" style="display:none; font-size:9px; font-weight:900; color:var(--accent); letter-spacing:0.5px; flex-shrink:0;"></span>
+          </div>
+          <div style="width:100%; background:rgba(0,0,0,0.5); border-radius:3px; height:4px; overflow:hidden; border:1px solid var(--border_solid);">
+            <div id="mini-bar" style="height:100%; width:0%; background:var(--accent); transition:width 0.4s ease; border-radius:3px;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span id="mini-pct" style="font-size:10px; font-weight:900; color:var(--accent);">0%</span>
+            <span id="mini-eta" style="font-size:9px; color:var(--text_dim);"></span>
+            <span style="font-size:9px; font-weight:900; color:var(--text_dim); letter-spacing:1px;">↑ SHOW</span>
+          </div>
+        </div>
+
         <div class="tool-status" id="status-legendary"><div class="dot"></div>legendary</div>
         <div class="tool-status" id="status-gogdl"><div class="dot"></div>gogdl</div>
         <div class="tool-status" id="status-umu"><div class="dot"></div>umu-run</div>
@@ -603,6 +636,11 @@
         </div>
         <button class="btn-save-settings" id="btn-save-settings">Save Settings</button>
         <div class="settings-section" style="margin-top:28px;">
+          <h3>Config Files</h3>
+          <p style="font-size:14px; color:var(--text_dim); margin-bottom:12px; line-height:1.6;">Open GRINDER's configuration folder in your system file manager. Contains the game database, prefixes, game logs, auth tokens, and downloaded manifests.</p>
+          <button class="btn-save-settings" id="btn-browse-config-dir" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_sec);">Browse Config Files</button>
+        </div>
+        <div class="settings-section" style="margin-top:28px;">
           <h3>About</h3>
           <button class="btn-save-settings" id="btn-show-welcome" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_sec);">Show Welcome Screen</button>
         </div>
@@ -655,6 +693,142 @@
         </label>
         <button id="btn-wlc-close" class="btn-confirm" style="padding:10px 28px; font-size:14px;">LET'S GO</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Add Game Folder Modal -->
+  <div id="modal-add-folder" class="modal-overlay">
+    <div class="modal-box" style="width:540px; max-height:84vh; overflow-y:auto;">
+
+      <!-- Header -->
+      <div style="margin-bottom:22px;">
+        <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase; margin-bottom:5px;">Import</div>
+        <h3 style="margin:0 0 6px; font-size:15px; letter-spacing:2px;">Add Game Folder</h3>
+        <p style="margin:0; font-size:13px; color:var(--text_dim); line-height:1.6;">Point GRINDER to an already-installed game — no re-download needed. Works with GOG, Epic, or any custom installation.</p>
+      </div>
+
+      <!-- Game folder -->
+      <div class="modal-row">
+        <label>Game Folder</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="afolder-path" placeholder="/path/to/installed/game" style="flex:1;">
+          <button id="btn-afolder-browse" class="btn-cancel" style="padding:8px 12px; font-size:12px; white-space:nowrap; flex-shrink:0;">Browse</button>
+        </div>
+        <div style="margin-top:10px;">
+          <button id="btn-afolder-scan" style="background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:5px; padding:7px 18px; font-family:Raleway,sans-serif; font-weight:900; font-size:10px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:0.15s;">Scan Folder</button>
+        </div>
+      </div>
+
+      <!-- Scan results — populated dynamically -->
+      <div id="afolder-scan-section" style="display:none; margin-top:4px;"></div>
+
+      <!-- Wine Prefix -->
+      <div class="modal-row" style="margin-top:20px; border-top:1px solid var(--border_solid); padding-top:18px;">
+        <label class="toggle-row" style="cursor:pointer; user-select:none;">
+          <input type="checkbox" id="afolder-has-prefix">
+          <span style="font-weight:700; color:var(--text_sec);">I already have a Wine prefix for this game</span>
+        </label>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.6; margin-top:4px; display:block;">Don't have one? No problem — GRINDER will create a fresh prefix automatically when you first launch the game.</span>
+        <div id="afolder-prefix-row" style="display:none; gap:8px; align-items:center; margin-top:10px;">
+          <input id="afolder-prefix-path" placeholder="~/.local/share/grinder/prefixes/..." style="flex:1;">
+          <button id="btn-afolder-browse-prefix" class="btn-cancel" style="padding:8px 12px; font-size:12px; white-space:nowrap; flex-shrink:0;">Browse</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-cancel" id="btn-afolder-cancel">Cancel</button>
+        <button class="btn-confirm" id="btn-afolder-import" disabled>Import Game</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Download Manager Modal -->
+  <div id="modal-dlm" class="modal-overlay" style="z-index:600;">
+    <div class="modal-box" style="width:620px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; gap:0; padding:0;">
+
+      <!-- Header -->
+      <div style="padding:18px 24px 14px; border-bottom:1px solid var(--border_solid); flex-shrink:0; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase; margin-bottom:4px;">Cafe Neurotico</div>
+          <h3 style="margin:0; font-size:15px; letter-spacing:2.5px;">Download Manager</h3>
+        </div>
+        <button id="btn-dlm-close" style="background:transparent; border:none; color:var(--text_dim); font-size:20px; cursor:pointer; padding:4px 8px; line-height:1; transition:0.15s; font-family:monospace;">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div style="overflow-y:auto; flex:1; padding:20px 24px; display:flex; flex-direction:column; gap:22px; min-height:0;">
+
+        <!-- Active download -->
+        <div id="dlm-active-section" style="display:none; flex-direction:column; gap:10px;">
+          <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase;">Downloading Now</div>
+          <div style="background:rgba(255,255,255,0.03); border:1px solid var(--accent); border-radius:8px; padding:20px 22px;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; gap:14px;">
+              <div style="min-width:0;">
+                <div id="dlm-active-store" style="font-size:9px; font-weight:900; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;"></div>
+                <div id="dlm-active-title" style="font-size:18px; font-weight:900; color:var(--text_main); letter-spacing:0.3px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+              </div>
+              <button id="dlm-btn-cancel-active" style="flex-shrink:0; padding:6px 14px; background:rgba(239,83,80,0.1); border:1px solid #ef5350; color:#ef5350; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.15s; white-space:nowrap;">Cancel</button>
+            </div>
+            <!-- Progress bar -->
+            <div style="width:100%; background:rgba(0,0,0,0.5); border-radius:5px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); margin-bottom:12px;">
+              <div id="dlm-bar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #ffffff) 100%); transition:width 0.35s ease; border-radius:5px;"></div>
+            </div>
+            <!-- Stats -->
+            <div style="display:flex; align-items:center; gap:18px;">
+              <span id="dlm-pct" style="font-size:30px; font-weight:900; color:var(--accent); letter-spacing:-1px; line-height:1;">0%</span>
+              <div style="display:flex; flex-direction:column; gap:3px;">
+                <span id="dlm-speed" style="font-size:13px; color:var(--text_sec); font-weight:700;"></span>
+                <span id="dlm-eta" style="font-size:12px; color:var(--text_dim); letter-spacing:0.3px;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Queue section -->
+        <div id="dlm-queue-section" style="display:none; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase;">Queue</div>
+            <span id="dlm-queue-label" style="font-size:11px; color:var(--text_dim);"></span>
+          </div>
+          <div id="dlm-queue-list" style="display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+
+        <!-- History section -->
+        <div id="dlm-history-section" style="display:none; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase;">Completed</div>
+            <button id="dlm-btn-clear-all" style="font-size:9px; font-weight:900; color:var(--text_dim); background:transparent; border:1px solid var(--border_solid); border-radius:4px; padding:3px 10px; cursor:pointer; font-family:Raleway,sans-serif; letter-spacing:1.5px; text-transform:uppercase; transition:0.15s;">Clear All</button>
+          </div>
+          <div id="dlm-history-list" style="display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="dlm-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:48px 0; gap:12px; text-align:center;">
+          <div style="font-size:32px; opacity:0.15; line-height:1;">↓</div>
+          <div style="font-size:12px; font-weight:900; color:var(--text_dim); letter-spacing:2px; text-transform:uppercase;">No Downloads</div>
+          <div style="font-size:12px; color:var(--text_dim); opacity:0.6;">Queue is empty</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Log Modal -->
+  <div id="modal-game-log" style="display:none; position:fixed; inset:0; z-index:800; background:rgba(0,0,0,0.75); align-items:center; justify-content:center;">
+    <div style="background:var(--bg_menu); border:1px solid var(--border_solid); border-radius:12px; width:720px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.8);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid var(--border_solid); flex-shrink:0;">
+        <div>
+          <div style="font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text_dim); margin-bottom:4px;">Launch Log</div>
+          <div id="log-modal-title" style="font-size:16px; font-weight:900; color:var(--text_main); letter-spacing:0.5px;"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="btn-log-copy" style="background:rgba(255,255,255,0.06); border:1px solid var(--border_solid); color:var(--text_sec); padding:6px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; cursor:pointer; text-transform:uppercase;">Copy</button>
+          <button id="btn-log-close" style="background:transparent; border:none; color:var(--text_dim); font-size:20px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+        </div>
+      </div>
+      <pre id="log-modal-content" style="flex:1; overflow-y:auto; margin:0; padding:18px 20px; font-family:monospace; font-size:13px; color:var(--text_sec); line-height:1.65; white-space:pre-wrap; word-break:break-word; user-select:text;"></pre>
     </div>
   </div>
 

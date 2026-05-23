@@ -83,6 +83,7 @@ window.api.getCngmTheme().then(name => {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let allGames = [];
+let _logIndex = new Set();
 let selectedId = null;
 
 // ── View switching ─────────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ function renderGames(games) {
     count.textContent = `${games.length} game${games.length !== 1 ? 's' : ''}`;
 
     if (!games.length) {
-        list.innerHTML = `<div id="empty-state"><p>NO GAMES YET</p><p style="font-size:11px">Click + Add Game to get started.</p></div>`;
+        list.innerHTML = `<div id="empty-state"><p>NO GAMES YET</p><p style="font-size:11px">Click + Add Custom Game or + Add Game Folder to get started.</p></div>`;
         return;
     }
 
@@ -221,6 +222,7 @@ function renderGames(games) {
                     ${!g.installed && g.store === 'epic' ? `<button class="btn-install-game" data-install="${g.id}" style="background:#0078f2;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
                     ${!g.installed && g.store === 'gog'  ? `<button class="btn-install-game" data-install="${g.id}" style="background:#9b59d9;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-family:Raleway,sans-serif;font-weight:900;font-size:10px;cursor:pointer;letter-spacing:0.5px;">↓ Install</button>` : ''}
                     <button class="btn-edit" data-edit="${g.id}">Edit</button>
+                    ${_logIndex.has(g.id) ? `<button class="btn-see-log" data-see-log="${g.id}">See Log</button>` : ''}
                     ${g.installed ? `<button class="btn-uninstall" data-uninstall="${g.id}">Uninstall</button>` : ''}
                     <button class="btn-delete" data-delete="${g.id}">✕</button>
                 </div>
@@ -253,6 +255,8 @@ function renderGames(games) {
             btn.disabled = true;
             const result = await window.api.launchGame(id);
             btn.disabled = false;
+            _logIndex.add(id);
+            renderGames(filterGames());
             if (!result.ok) { closeNowPlaying(); setStatus(`Error: ${result.error}`); }
             else setStatus(`Launched via ${result.method}.`);
         });
@@ -289,6 +293,16 @@ function renderGames(games) {
             await window.api.deleteGame(game.id);
             if (selectedId === game.id) selectedId = null;
             await loadGames();
+        });
+    });
+
+    // See Log buttons
+    list.querySelectorAll('[data-see-log]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const game = allGames.find(g => g.id === btn.dataset.seeLog);
+            if (!game) return;
+            openLogModal(game.id, game.title);
         });
     });
 
@@ -377,7 +391,10 @@ function filterGames() {
 }
 
 async function loadGames() {
-    allGames = await window.api.getGames();
+    [allGames] = await Promise.all([
+        window.api.getGames(),
+        window.api.getLogIndex().then(ids => { _logIndex = new Set(ids); }),
+    ]);
     buildFilterBar();
     renderGames(filterGames());
     await loadGameSizes();
@@ -425,6 +442,10 @@ function openModal(game = null) {
     document.getElementById('edit-install-path').value = game?.install_path || '';
     document.getElementById('edit-exe').value          = game?.executable   || '';
     document.getElementById('edit-launch-args').value = game?.launch_args  || '';
+    const hasCustomExe = !!(game?.custom_exe);
+    document.getElementById('edit-custom-exe-enabled').checked = hasCustomExe;
+    document.getElementById('edit-custom-exe').value           = game?.custom_exe || '';
+    document.getElementById('edit-custom-exe-fields').style.display = hasCustomExe ? 'flex' : 'none';
     document.getElementById('edit-prefix').value       = game?.prefix_path  || '';
     populateProtonDropdown(protonVersions, game?.proton_path || '');
     document.getElementById('edit-notes').value        = game?.notes        || '';
@@ -467,6 +488,235 @@ document.getElementById('btn-add-game').addEventListener('click', () => openModa
 document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
 modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
+// ── Add Game Folder ───────────────────────────────────────────────────────────
+let _afolderSelected = null; // {type:'library', game, executable} | {type:'custom', title, executable}
+let _afolderExes     = [];
+
+function openAddFolderModal() {
+    _afolderSelected = null;
+    _afolderExes     = [];
+    document.getElementById('afolder-path').value                   = '';
+    document.getElementById('afolder-scan-section').style.display   = 'none';
+    document.getElementById('afolder-scan-section').innerHTML       = '';
+    document.getElementById('afolder-has-prefix').checked           = false;
+    document.getElementById('afolder-prefix-row').style.display     = 'none';
+    document.getElementById('afolder-prefix-path').value            = '';
+    document.getElementById('btn-afolder-import').disabled          = true;
+    document.getElementById('modal-add-folder').classList.add('active');
+}
+
+function closeAddFolderModal() {
+    document.getElementById('modal-add-folder').classList.remove('active');
+}
+
+async function doAfolderScan() {
+    const p = document.getElementById('afolder-path').value.trim();
+    if (!p) return;
+
+    const section = document.getElementById('afolder-scan-section');
+    section.style.display = 'block';
+    section.innerHTML = `<div style="font-size:12px; color:var(--text_dim); padding:10px 2px; letter-spacing:1px;">Scanning folder…</div>`;
+    document.getElementById('btn-afolder-import').disabled = true;
+
+    const result = await window.api.scanGameFolder(p);
+
+    if (!result.ok) {
+        section.innerHTML = `<div style="padding:11px 14px; background:rgba(239,83,80,0.07); border:1px solid rgba(239,83,80,0.3); border-radius:6px; font-size:12px; color:#ef5350;">✗ ${result.error || 'Could not read folder. Check the path and permissions.'}</div>`;
+        return;
+    }
+
+    _afolderExes = result.exes || [];
+
+    // Match detected markers against the local library
+    const libraryMatches = [];
+    for (const d of (result.detected || [])) {
+        for (const g of allGames) {
+            if (g.store === d.store && g.app_id === d.app_id) {
+                libraryMatches.push({ game: g, detected: d });
+            }
+        }
+    }
+
+    renderAfolderResults(libraryMatches, result.detected || []);
+}
+
+function renderAfolderResults(libraryMatches, detected) {
+    const section = document.getElementById('afolder-scan-section');
+    const exes = _afolderExes;
+
+    const storeColor = s => s === 'gog' ? '#9b59d9' : s === 'epic' ? '#4a9eff' : 'var(--accent)';
+    const storeLabel = s => s === 'gog' ? 'GOG' : s === 'epic' ? 'EPIC' : (s || '').toUpperCase();
+
+    if (libraryMatches.length === 0) {
+        // No match — custom game
+        const guessTitle = exes[0]?.replace(/\.(exe|bat|sh)$/i, '') || '';
+        _afolderSelected = { type: 'custom', title: guessTitle, executable: exes[0] || '' };
+
+        const noMatchDetail = detected.length > 0
+            ? `<span style="font-size:11px; color:var(--text_dim); margin-top:4px; display:block; line-height:1.5;">Detected: ${detected.map(d => `<strong>${d.app_id}</strong> (${d.store})`).join(', ')} — not found in your library.</span>`
+            : '';
+
+        const exeOpts = exes.length > 0
+            ? `<div class="modal-row" style="margin:10px 0 0;">
+                <label>Executable <span style="font-size:11px; font-weight:400; color:var(--text_dim);">(relative to folder)</span></label>
+                <select id="afolder-exe-sel" style="background:var(--bg); border:1px solid var(--border_solid); color:var(--text_main); border-radius:5px; padding:7px 10px; font-family:Raleway,sans-serif; font-size:13px; width:100%;">
+                    <option value="">Leave blank — set later</option>
+                    ${exes.map(e => `<option value="${e}" ${e === exes[0] ? 'selected' : ''}>${e}</option>`).join('')}
+                </select>
+               </div>`
+            : '';
+
+        section.innerHTML = `
+            <div style="padding:11px 14px; background:rgba(255,179,0,0.05); border:1px solid rgba(255,179,0,0.25); border-radius:6px; margin-bottom:12px;">
+                <div style="font-size:9px; font-weight:900; color:#ffb300; letter-spacing:2px; margin-bottom:4px;">NO LIBRARY MATCH</div>
+                <div style="font-size:12px; color:var(--text_dim); line-height:1.5;">No matching game found in your library. Enter a title to add this as a custom game.</div>
+                ${noMatchDetail}
+            </div>
+            <div class="modal-row" style="margin:0;">
+                <label>Game Title <span style="color:#ef5350; font-weight:900;">*</span></label>
+                <input id="afolder-custom-title" placeholder="Enter a name for this game" value="${guessTitle}">
+            </div>
+            ${exeOpts}`;
+
+        const titleEl = document.getElementById('afolder-custom-title');
+        const importBtn = document.getElementById('btn-afolder-import');
+        importBtn.disabled = !titleEl?.value.trim();
+        titleEl?.addEventListener('input', e => {
+            _afolderSelected.title = e.target.value;
+            importBtn.disabled = !e.target.value.trim();
+        });
+        document.getElementById('afolder-exe-sel')?.addEventListener('change', e => { _afolderSelected.executable = e.target.value; });
+
+    } else if (libraryMatches.length === 1) {
+        const m = libraryMatches[0];
+        _afolderSelected = { type: 'library', game: m.game, executable: m.detected.executable };
+        const sc = storeColor(m.game.store);
+        const sl = storeLabel(m.game.store);
+
+        section.innerHTML = `
+            <div style="padding:13px 16px; background:rgba(102,187,106,0.06); border:1px solid rgba(102,187,106,0.3); border-radius:6px;">
+                <div style="font-size:9px; font-weight:900; color:#66bb6a; letter-spacing:2px; margin-bottom:7px;">MATCH FOUND</div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-size:15px; font-weight:900; color:var(--text_main);">${m.game.title}</span>
+                    <span style="font-size:9px; font-weight:900; color:${sc}; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:3px; letter-spacing:1.5px;">${sl}</span>
+                </div>
+                <div style="font-size:11px; color:var(--text_dim); margin-top:6px; line-height:1.5;">This folder will be linked to the existing library entry — no re-download needed.</div>
+            </div>`;
+        document.getElementById('btn-afolder-import').disabled = false;
+
+    } else {
+        // Multiple matches — show radio chooser
+        _afolderSelected = { type: 'library', game: libraryMatches[0].game, executable: libraryMatches[0].detected.executable };
+
+        const radioItems = libraryMatches.map((m, i) => {
+            const sc = storeColor(m.game.store);
+            const sl = storeLabel(m.game.store);
+            return `<label style="display:flex; align-items:center; gap:10px; padding:9px 13px; background:rgba(255,255,255,0.03); border:1px solid var(--border_solid); border-radius:5px; cursor:pointer;">
+                <input type="radio" name="afolder-match" value="${i}" ${i === 0 ? 'checked' : ''} style="accent-color:var(--accent); flex-shrink:0;">
+                <span style="font-size:13px; font-weight:700; color:var(--text_main); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.game.title}</span>
+                <span style="font-size:9px; font-weight:900; color:${sc}; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:3px; letter-spacing:1.5px; flex-shrink:0;">${sl}</span>
+            </label>`;
+        }).join('');
+
+        section.innerHTML = `
+            <div style="padding:11px 14px; background:rgba(255,179,0,0.05); border:1px solid rgba(255,179,0,0.25); border-radius:6px; margin-bottom:10px;">
+                <div style="font-size:9px; font-weight:900; color:#ffb300; letter-spacing:2px; margin-bottom:4px;">MULTIPLE MATCHES</div>
+                <div style="font-size:12px; color:var(--text_dim);">More than one library entry matched. Select the correct one.</div>
+            </div>
+            <div id="afolder-match-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:4px;">
+                ${radioItems}
+                <label style="display:flex; align-items:center; gap:10px; padding:9px 13px; background:rgba(255,255,255,0.02); border:1px solid var(--border_solid); border-radius:5px; cursor:pointer;">
+                    <input type="radio" name="afolder-match" value="none" style="accent-color:var(--accent); flex-shrink:0;">
+                    <span style="font-size:12px; color:var(--text_dim);">None of these — add as custom game</span>
+                </label>
+            </div>
+            <div id="afolder-custom-section" style="display:none; margin-top:8px;">
+                <div class="modal-row" style="margin:0;">
+                    <label>Game Title <span style="color:#ef5350; font-weight:900;">*</span></label>
+                    <input id="afolder-custom-title" placeholder="Enter a name for this game">
+                </div>
+            </div>`;
+
+        document.getElementById('btn-afolder-import').disabled = false;
+
+        document.getElementById('afolder-match-list').querySelectorAll('input[name=afolder-match]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                const v = e.target.value;
+                const customSec = document.getElementById('afolder-custom-section');
+                const importBtn = document.getElementById('btn-afolder-import');
+                if (v === 'none') {
+                    _afolderSelected = { type: 'custom', title: '', executable: _afolderExes[0] || '' };
+                    customSec.style.display = 'block';
+                    const ti = document.getElementById('afolder-custom-title');
+                    importBtn.disabled = !ti?.value.trim();
+                    ti?.addEventListener('input', ev => {
+                        _afolderSelected.title = ev.target.value;
+                        importBtn.disabled = !ev.target.value.trim();
+                    });
+                } else {
+                    const m = libraryMatches[parseInt(v)];
+                    _afolderSelected = { type: 'library', game: m.game, executable: m.detected.executable };
+                    customSec.style.display = 'none';
+                    importBtn.disabled = false;
+                }
+            });
+        });
+    }
+}
+
+// Wire up Add Game Folder buttons
+document.getElementById('btn-add-game-folder').addEventListener('click', openAddFolderModal);
+document.getElementById('btn-afolder-cancel').addEventListener('click', closeAddFolderModal);
+document.getElementById('modal-add-folder').addEventListener('click', e => { if (e.target === document.getElementById('modal-add-folder')) closeAddFolderModal(); });
+
+document.getElementById('btn-afolder-browse').addEventListener('click', async () => {
+    const p = await window.api.selectDirectory();
+    if (p) document.getElementById('afolder-path').value = p;
+});
+
+document.getElementById('btn-afolder-scan').addEventListener('click', doAfolderScan);
+
+document.getElementById('afolder-has-prefix').addEventListener('change', e => {
+    document.getElementById('afolder-prefix-row').style.display = e.target.checked ? 'flex' : 'none';
+});
+
+document.getElementById('btn-afolder-browse-prefix').addEventListener('click', async () => {
+    const p = await window.api.selectDirectory();
+    if (p) document.getElementById('afolder-prefix-path').value = p;
+});
+
+document.getElementById('btn-afolder-import').addEventListener('click', async () => {
+    if (!_afolderSelected) return;
+    const folderPath = document.getElementById('afolder-path').value.trim();
+    if (!folderPath) return;
+
+    const hasPrefix  = document.getElementById('afolder-has-prefix').checked;
+    const prefixPath = hasPrefix ? (document.getElementById('afolder-prefix-path').value.trim() || null) : null;
+
+    if (_afolderSelected.type === 'library') {
+        const update = { install_path: folderPath, installed: 1 };
+        if (_afolderSelected.executable) update.executable = _afolderSelected.executable;
+        if (prefixPath)                  update.prefix_path = prefixPath;
+        await window.api.updateGame(_afolderSelected.game.id, update);
+        setStatus(`"${_afolderSelected.game.title}" linked to folder.`);
+    } else {
+        const title = document.getElementById('afolder-custom-title')?.value.trim() || 'Imported Game';
+        const exe   = document.getElementById('afolder-exe-sel')?.value || null;
+        await window.api.addGame({
+            title,
+            store:        'custom',
+            install_path: folderPath,
+            executable:   exe         || null,
+            prefix_path:  prefixPath  || null,
+            installed:    1,
+        });
+        setStatus(`"${title}" added to library.`);
+    }
+
+    closeAddFolderModal();
+    await loadGames();
+});
+
 document.getElementById('btn-modal-save').addEventListener('click', async () => {
     const id    = document.getElementById('edit-id').value;
     const title = document.getElementById('edit-title').value.trim();
@@ -490,6 +740,9 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
         use_eac:          document.getElementById('edit-eac').checked            ? 1 : 0,
         launch_target:    document.getElementById('edit-launch-target').value      || null,
         launch_args:      document.getElementById('edit-launch-args').value.trim() || null,
+        custom_exe:       document.getElementById('edit-custom-exe-enabled').checked
+                            ? (document.getElementById('edit-custom-exe').value.trim() || null)
+                            : null,
         installed:     document.getElementById('edit-install-path').value.trim() ? 1 : 0,
     };
 
@@ -556,6 +809,17 @@ document.getElementById('btn-browse-install').addEventListener('click', async ()
     if (err) showAlert('Browse', `Could not open folder: ${err}`);
 });
 
+// Toggle custom exe input visibility
+document.getElementById('edit-custom-exe-enabled').addEventListener('change', e => {
+    document.getElementById('edit-custom-exe-fields').style.display = e.target.checked ? 'flex' : 'none';
+});
+
+// Browse for custom executable (file picker)
+document.getElementById('btn-browse-custom-exe').addEventListener('click', async () => {
+    const p = await window.api.selectFile();
+    if (p) document.getElementById('edit-custom-exe').value = p;
+});
+
 // Browse prefix folder
 document.getElementById('btn-browse-prefix').addEventListener('click', async () => {
     let p = document.getElementById('edit-prefix').value.trim();
@@ -610,9 +874,16 @@ document.getElementById('btn-install-redist').addEventListener('click', async ()
 });
 
 // ── Installation ──────────────────────────────────────────────────────────────
-const modalInstall = document.getElementById('modal-install');
-let installingGame = null;
-let selectedPlatform = null; // tracks user's platform choice for current install
+const modalInstall    = document.getElementById('modal-install');
+let installingGame    = null; // game shown in modal config panel
+let activeInstallGame = null; // game actually running in background
+let selectedPlatform  = null; // platform choice for current config
+let installQueue      = [];   // [{game, dir, platform}] waiting their turn
+let installHistory    = [];   // [{game, success, completedAt}]
+let installActive     = false;
+let installModalMinimized = false;
+let dlmModalOpen      = false;
+let _miniPct          = 0;
 
 function openInstallModal(game) {
     installingGame = game;
@@ -655,10 +926,173 @@ function openInstallModal(game) {
         fetchInstallSizes();
     });
 
+    updateInstallQueueBadge();
     modalInstall.classList.add('active');
 }
 
-function closeInstallModal() { modalInstall.classList.remove('active'); installingGame = null; }
+function updateInstallQueueBadge() {
+    const badge = document.getElementById('install-queue-badge');
+    if (!badge) return;
+    if (installQueue.length > 0) {
+        badge.style.display = 'inline';
+        badge.textContent   = `+${installQueue.length} QUEUED`;
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function updateMiniWidget(pct) {
+    const widget = document.getElementById('install-mini');
+    if (!widget) return;
+    const show = installModalMinimized && installActive;
+    widget.style.display = show ? 'flex' : 'none';
+    if (!show) return;
+    document.getElementById('mini-game-name').textContent = activeInstallGame?.title || '…';
+    if (pct !== undefined) {
+        _miniPct = pct;
+        document.getElementById('mini-bar').style.width  = pct + '%';
+        document.getElementById('mini-pct').textContent  = pct.toFixed(1) + '%';
+    }
+    const qc = document.getElementById('mini-queue-count');
+    if (installQueue.length > 0) {
+        qc.style.display = 'inline';
+        qc.textContent   = `+${installQueue.length} queued`;
+    } else {
+        qc.style.display = 'none';
+    }
+}
+
+function minimizeInstallModal() {
+    modalInstall.classList.remove('active');
+    installModalMinimized = true;
+    updateMiniWidget(_miniPct);
+}
+
+function restoreInstallModal() {
+    installModalMinimized = false;
+    updateMiniWidget(); // hide widget
+    modalInstall.classList.add('active');
+}
+
+// ── Download Manager Modal ─────────────────────────────────────────────────────
+
+function openDlmModal() {
+    dlmModalOpen = true;
+    document.getElementById('modal-dlm').classList.add('active');
+    renderDlmModal();
+}
+
+function closeDlmModal() {
+    dlmModalOpen = false;
+    document.getElementById('modal-dlm').classList.remove('active');
+}
+
+function updateDlmProgress(pct, speed, eta) {
+    if (!dlmModalOpen) return;
+    if (pct !== null) {
+        document.getElementById('dlm-bar').style.width = pct + '%';
+        document.getElementById('dlm-pct').textContent = pct.toFixed(1) + '%';
+    }
+    if (speed) document.getElementById('dlm-speed').textContent = speed;
+    if (eta)   document.getElementById('dlm-eta').textContent   = 'ETA ' + eta;
+}
+
+function renderDlmModal() {
+    if (!dlmModalOpen) return;
+
+    const hasActive  = installActive && !!activeInstallGame;
+    const hasQueue   = installQueue.length > 0;
+    const hasHistory = installHistory.length > 0;
+
+    // Active section
+    const activeSection = document.getElementById('dlm-active-section');
+    activeSection.style.display = hasActive ? 'flex' : 'none';
+    if (hasActive) {
+        document.getElementById('dlm-active-title').textContent = activeInstallGame.title;
+        const storeEl = document.getElementById('dlm-active-store');
+        if (activeInstallGame.store === 'gog')       { storeEl.textContent = 'GOG';        storeEl.style.color = '#9b59d9'; }
+        else if (activeInstallGame.store === 'epic') { storeEl.textContent = 'Epic Games'; storeEl.style.color = '#4a9eff'; }
+        else                                          { storeEl.textContent = activeInstallGame.store || ''; storeEl.style.color = 'var(--text_dim)'; }
+        document.getElementById('dlm-bar').style.width   = _miniPct + '%';
+        document.getElementById('dlm-pct').textContent   = _miniPct.toFixed(1) + '%';
+        document.getElementById('dlm-speed').textContent = '';
+        document.getElementById('dlm-eta').textContent   = '';
+    }
+
+    // Queue section
+    const queueSection = document.getElementById('dlm-queue-section');
+    queueSection.style.display = hasQueue ? 'flex' : 'none';
+    if (hasQueue) {
+        document.getElementById('dlm-queue-label').textContent = `${installQueue.length} waiting`;
+        const list = document.getElementById('dlm-queue-list');
+        list.innerHTML = installQueue.map((item, idx) => {
+            const sc = item.game.store === 'gog' ? '#9b59d9' : item.game.store === 'epic' ? '#4a9eff' : 'var(--text_dim)';
+            const sl = item.game.store === 'gog' ? 'GOG' : item.game.store === 'epic' ? 'EPIC' : (item.game.store || '').toUpperCase();
+            return `<div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border_solid); border-radius:6px;">
+                <div style="width:6px; height:6px; border-radius:50%; background:var(--text_dim); flex-shrink:0;"></div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:700; color:var(--text_sec); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.game.title}</div>
+                    <div style="font-size:10px; color:${sc}; margin-top:2px; letter-spacing:0.5px; font-weight:700;">${sl} · Waiting</div>
+                </div>
+                <button class="btn-dlm-cancel-queue" data-idx="${idx}" style="flex-shrink:0; padding:4px 10px; background:rgba(255,255,255,0.04); border:1px solid var(--border_solid); color:var(--text_dim); border-radius:4px; font-family:Raleway,sans-serif; font-weight:900; font-size:10px; letter-spacing:1px; cursor:pointer; text-transform:uppercase; transition:0.15s;">✕ Remove</button>
+            </div>`;
+        }).join('');
+        list.querySelectorAll('.btn-dlm-cancel-queue').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx);
+                installQueue.splice(idx, 1);
+                updateInstallQueueBadge();
+                updateMiniWidget();
+                renderDlmModal();
+            });
+        });
+    }
+
+    // History section
+    const histSection = document.getElementById('dlm-history-section');
+    histSection.style.display = hasHistory ? 'flex' : 'none';
+    if (hasHistory) {
+        const list = document.getElementById('dlm-history-list');
+        list.innerHTML = installHistory.map((item, idx) => {
+            const col  = item.success ? '#66bb6a' : '#ef5350';
+            const icon = item.success ? '✓' : '✗';
+            const statusText = item.success ? 'Installed successfully' : 'Installation failed';
+            const sc = item.game.store === 'gog' ? '#9b59d9' : item.game.store === 'epic' ? '#4a9eff' : 'var(--text_dim)';
+            const sl = item.game.store === 'gog' ? 'GOG' : item.game.store === 'epic' ? 'EPIC' : (item.game.store || '').toUpperCase();
+            return `<div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border_solid); border-radius:6px; opacity:0.85;">
+                <div style="font-size:15px; font-weight:900; color:${col}; flex-shrink:0; width:16px; text-align:center; line-height:1;">${icon}</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:700; color:var(--text_main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.game.title}</div>
+                    <div style="display:flex; gap:6px; align-items:center; margin-top:2px;">
+                        <span style="font-size:10px; color:${sc}; font-weight:700; letter-spacing:0.5px;">${sl}</span>
+                        <span style="font-size:10px; color:${col}; font-weight:700; letter-spacing:0.5px;">· ${statusText}</span>
+                    </div>
+                </div>
+                <button class="btn-dlm-remove-history" data-idx="${idx}" style="flex-shrink:0; padding:4px 8px; background:transparent; border:1px solid var(--border_solid); color:var(--text_dim); border-radius:4px; font-family:Raleway,sans-serif; font-weight:900; font-size:10px; cursor:pointer; transition:0.15s;" title="Remove from history">✕</button>
+            </div>`;
+        }).join('');
+        list.querySelectorAll('.btn-dlm-remove-history').forEach(btn => {
+            btn.addEventListener('click', () => {
+                installHistory.splice(parseInt(btn.dataset.idx), 1);
+                renderDlmModal();
+            });
+        });
+    }
+
+    // Empty state
+    document.getElementById('dlm-empty').style.display = (!hasActive && !hasQueue && !hasHistory) ? 'flex' : 'none';
+}
+
+function closeInstallModal() {
+    modalInstall.classList.remove('active');
+    installingGame = null;
+    if (!installActive) {
+        installModalMinimized = false;
+        activeInstallGame = null;
+        updateMiniWidget();
+    }
+    updateInstallQueueBadge();
+}
 
 function fmtBytes(b) {
     return b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
@@ -710,7 +1144,7 @@ document.getElementById('btn-browse-install-dir')?.addEventListener('click', asy
 });
 
 document.getElementById('btn-install-cancel-running')?.addEventListener('click', async () => {
-    if (installingGame?.store === 'gog') {
+    if (activeInstallGame?.store === 'gog') {
         await window.api.gogCancelInstall();
     } else {
         await window.api.cancelInstall();
@@ -718,7 +1152,40 @@ document.getElementById('btn-install-cancel-running')?.addEventListener('click',
     document.getElementById('install-log').textContent += '\n⚠ Installation cancelled.\n';
     document.getElementById('btn-install-cancel-running').disabled = true;
     setStatus('Installation cancelled.');
+    // Clear pending queue on explicit cancel
+    installQueue = [];
+    updateInstallQueueBadge();
 });
+
+// DLM modal controls
+document.getElementById('btn-dlm-close')?.addEventListener('click', closeDlmModal);
+document.getElementById('modal-dlm')?.addEventListener('click', e => { if (e.target === document.getElementById('modal-dlm')) closeDlmModal(); });
+
+document.getElementById('dlm-btn-cancel-active')?.addEventListener('click', async () => {
+    if (activeInstallGame?.store === 'gog') await window.api.gogCancelInstall();
+    else await window.api.cancelInstall();
+    installQueue = [];
+    updateInstallQueueBadge();
+    updateMiniWidget();
+    renderDlmModal();
+    setStatus('Installation cancelled.');
+});
+
+document.getElementById('dlm-btn-clear-all')?.addEventListener('click', () => {
+    installHistory = [];
+    renderDlmModal();
+});
+
+// Backdrop click: minimize when in progress, otherwise close
+modalInstall.addEventListener('click', e => {
+    if (e.target !== modalInstall) return;
+    const inProgress = document.getElementById('install-progress-panel').style.display !== 'none';
+    if (inProgress) minimizeInstallModal();
+    else closeInstallModal();
+});
+
+// Mini widget click → open Download Manager
+document.getElementById('install-mini')?.addEventListener('click', openDlmModal);
 
 function parseProgress(line) {
     const pct   = line.match(/Progress:\s*([\d.]+)%/)?.[1];
@@ -733,22 +1200,26 @@ window.api.onInstallProgress(data => {
     log.textContent += data;
     log.scrollTop = log.scrollHeight;
 
-    // Parse and update progress indicators
     const { pct, speed, eta } = parseProgress(data);
     if (pct !== null) {
         document.getElementById('install-progress-bar').style.width = pct + '%';
         document.getElementById('install-pct-label').textContent = pct.toFixed(1) + '%';
-        setStatus(`Installing ${installingGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+        setStatus(`Installing ${activeInstallGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+        if (installModalMinimized) updateMiniWidget(pct);
     }
     if (speed) document.getElementById('install-speed-label').textContent = speed;
-    if (eta)   document.getElementById('install-eta-label').textContent   = 'ETA ' + eta;
+    if (eta) {
+        document.getElementById('install-eta-label').textContent = 'ETA ' + eta;
+        const me = document.getElementById('mini-eta');
+        if (me) me.textContent = 'ETA ' + eta;
+    }
+    updateDlmProgress(pct, speed, eta);
 });
 
 // GOG install progress feeds the same install log/bar
 window.api.onGogInstallProgress(data => {
     const log = document.getElementById('install-log');
     if (!log) return;
-    // Regular install sends plain strings; auto-redist sends { line, done, ok, msg }
     const text = (typeof data === 'object') ? (data.line || '') : String(data);
     if (text) { log.textContent += text; log.scrollTop = log.scrollHeight; }
     if (typeof data === 'object' && data.done) {
@@ -760,10 +1231,16 @@ window.api.onGogInstallProgress(data => {
     if (pct !== null) {
         document.getElementById('install-progress-bar').style.width = pct + '%';
         document.getElementById('install-pct-label').textContent = pct.toFixed(1) + '%';
-        setStatus(`Installing ${installingGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+        setStatus(`Installing ${activeInstallGame?.title || 'game'}: ${pct.toFixed(1)}%`);
+        if (installModalMinimized) updateMiniWidget(pct);
     }
     if (speed) document.getElementById('install-speed-label').textContent = speed;
-    if (eta)   document.getElementById('install-eta-label').textContent   = 'ETA ' + eta;
+    if (eta) {
+        document.getElementById('install-eta-label').textContent = 'ETA ' + eta;
+        const me = document.getElementById('mini-eta');
+        if (me) me.textContent = 'ETA ' + eta;
+    }
+    updateDlmProgress(pct, speed, eta);
 });
 
 document.getElementById('btn-install-start')?.addEventListener('click', async () => {
@@ -772,58 +1249,127 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     if (!dir) { setStatus('Choose an install directory first.'); return; }
 
     await window.api.setSetting('default_install_dir', dir);
+    const platform = selectedPlatform || installingGame.platform || 'windows';
 
-    document.getElementById('install-config-panel').style.display   = 'none';
-    document.getElementById('install-progress-panel').style.display = 'flex';
-    document.getElementById('btn-install-cancel-running').disabled  = false;
-    setStatus(`Starting installation of ${installingGame.title}...`);
-
-    let result;
-    if (installingGame.store === 'gog') {
-        const platform = selectedPlatform || installingGame.platform || 'windows';
-        result = await window.api.gogInstall(installingGame.app_id, platform, dir);
-    } else {
-        result = await window.api.installGame(installingGame.app_id, dir);
+    if (installActive) {
+        // Another install is running — queue this one
+        const queued = installingGame;
+        installQueue.push({ game: queued, dir, platform });
+        installingGame = null;
+        modalInstall.classList.remove('active');
+        updateInstallQueueBadge();
+        updateMiniWidget();
+        setStatus(`"${queued.title}" added to install queue (${installQueue.length} in queue).`);
+        return;
     }
 
+    beginInstall(installingGame, dir, platform);
+});
+
+async function beginInstall(game, dir, platform) {
+    activeInstallGame = game;
+    installingGame    = game;
+    selectedPlatform  = platform;
+    installActive     = true;
+    _miniPct          = 0;
+
+    document.getElementById('install-modal-title').textContent      = 'Install Game';
+    document.getElementById('install-modal-subtitle').textContent   = game.title;
+    document.getElementById('install-config-panel').style.display   = 'none';
+    document.getElementById('install-progress-panel').style.display = 'flex';
+    document.getElementById('install-done-panel').style.display     = 'none';
+    document.getElementById('install-log').textContent              = '';
+    document.getElementById('install-progress-bar').style.width     = '0%';
+    document.getElementById('install-pct-label').textContent        = '0%';
+    document.getElementById('install-speed-label').textContent      = '';
+    document.getElementById('install-eta-label').textContent        = '';
+    const cancelBtn = document.getElementById('btn-install-cancel-running');
+    cancelBtn.disabled    = false;
+    cancelBtn.textContent = 'Cancel Download';
+    cancelBtn.className   = 'btn-danger modal-actions';
+    cancelBtn.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
+    cancelBtn.onclick = null;
+
+    updateInstallQueueBadge();
+    renderDlmModal();
+    if (!installModalMinimized) modalInstall.classList.add('active');
+    else updateMiniWidget(0);
+    setStatus(`Starting installation of ${game.title}...`);
+
+    let result;
+    if (game.store === 'gog') {
+        result = await window.api.gogInstall(game.app_id, platform, dir);
+    } else {
+        result = await window.api.installGame(game.app_id, dir);
+    }
+
+    installActive = false;
     document.getElementById('install-progress-panel').style.display = 'none';
 
     if (result.ok) {
-        if (installingGame.store === 'gog') {
+        if (game.store === 'gog') {
             const gi = result.gameInfo;
-            await window.api.updateGame(installingGame.id, {
+            await window.api.updateGame(game.id, {
                 install_path: gi?.install_path || null,
                 executable:   gi?.executable   || null,
-                platform:     selectedPlatform || installingGame.platform || 'windows',
+                platform,
                 installed:    1,
             });
         } else {
             const info = result.info;
             if (info) {
-                await window.api.updateGame(installingGame.id, {
+                await window.api.updateGame(game.id, {
                     install_path: info.install_path || null,
                     executable:   info.executable   || null,
                     version:      info.version       || null,
                     installed:    1,
                 });
             } else {
-                await window.api.updateGame(installingGame.id, { installed: 1 });
+                await window.api.updateGame(game.id, { installed: 1 });
             }
         }
-        document.getElementById('install-done-msg').textContent = `${installingGame.title} installed!`;
-        document.getElementById('install-done-panel').style.display = 'flex';
-        setStatus(`${installingGame.title} installed successfully.`);
+        installHistory.push({ game, success: true, completedAt: Date.now() });
+        setStatus(`${game.title} installed successfully.`);
+        loadGames();
+
+        if (installQueue.length > 0) {
+            const next = installQueue.shift();
+            updateInstallQueueBadge();
+            updateMiniWidget();
+            renderDlmModal();
+            setStatus(`Next up: ${next.game.title}…`);
+            setTimeout(() => beginInstall(next.game, next.dir, next.platform), 600);
+        } else {
+            activeInstallGame = null;
+            renderDlmModal();
+            if (installModalMinimized) {
+                // Queue done while minimized — hide mini widget, open DLM to show history
+                installModalMinimized = false;
+                updateMiniWidget();
+                openDlmModal();
+            } else {
+                document.getElementById('install-done-msg').textContent = `${game.title} installed!`;
+                document.getElementById('install-done-panel').style.display = 'flex';
+                updateMiniWidget();
+            }
+        }
     } else {
+        installHistory.push({ game, success: false, completedAt: Date.now() });
         document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? result.error ?? 'error'}).\n`;
         document.getElementById('install-progress-panel').style.display = 'flex';
-        const cancelBtn = document.getElementById('btn-install-cancel-running');
-        cancelBtn.textContent = 'Close';
-        cancelBtn.className = 'btn-cancel';
-        cancelBtn.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
-        cancelBtn.onclick = closeInstallModal;
-        setStatus(`Installation of ${installingGame.title} failed.`);
+        const cb = document.getElementById('btn-install-cancel-running');
+        cb.textContent = 'Close';
+        cb.className   = 'btn-cancel';
+        cb.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
+        cb.onclick = closeInstallModal;
+        setStatus(`Installation of ${game.title} failed.`);
+        activeInstallGame = null;
+        renderDlmModal();
+        if (installModalMinimized) restoreInstallModal(); // show error in install modal
+        updateMiniWidget();
+        loadGames();
     }
-});
+}
 
 // ── Legendary / Epic ──────────────────────────────────────────────────────────
 let legendaryStatus = null;
@@ -1286,6 +1832,39 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     await window.api.setSetting('default_proton_path', document.getElementById('s-proton').value.trim());
     await window.api.setSetting('default_prefix_dir',  document.getElementById('s-prefix-dir').value.trim());
     setStatus('Settings saved.');
+});
+
+document.getElementById('btn-browse-config-dir')?.addEventListener('click', () => window.api.openConfigDir());
+
+// ── Log Modal ─────────────────────────────────────────────────────────────────
+async function openLogModal(gameId, gameTitle) {
+    const modal   = document.getElementById('modal-game-log');
+    const titleEl = document.getElementById('log-modal-title');
+    const content = document.getElementById('log-modal-content');
+    const copyBtn = document.getElementById('btn-log-copy');
+    if (!modal) return;
+
+    titleEl.textContent = gameTitle;
+    content.textContent = 'Loading…';
+    modal.style.display = 'flex';
+
+    const res = await window.api.getGameLog(gameId);
+    if (!res.exists) {
+        content.textContent = '(no log file found)';
+        return;
+    }
+    content.textContent = res.content;
+
+    copyBtn.onclick = async () => {
+        await navigator.clipboard.writeText(res.content);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+    };
+}
+
+document.getElementById('btn-log-close')?.addEventListener('click', () => {
+    document.getElementById('modal-game-log').style.display = 'none';
 });
 
 // ── GE-Proton downloader ──────────────────────────────────────────────────────

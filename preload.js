@@ -35,7 +35,10 @@ contextBridge.exposeInMainWorld('api', {
     // Environment
     checkTools:   () => ipcRenderer.invoke('check-tools'),
     openPath:     (p) => ipcRenderer.invoke('open-path', p),
-    getConfigDir: () => ipcRenderer.invoke('get-config-dir'),
+    getConfigDir:   () => ipcRenderer.invoke('get-config-dir'),
+    openConfigDir:  () => ipcRenderer.invoke('open-config-dir'),
+    getGameLog:     (id) => ipcRenderer.invoke('get-game-log', id),
+    getLogIndex:    () => ipcRenderer.invoke('get-log-index'),
     scanProton:   () => ipcRenderer.invoke('scan-proton'),
     installUmu:   () => ipcRenderer.invoke('install-umu'),
     onUmuInstallProgress: (cb) => ipcRenderer.on('umu-install-progress', (_, data) => cb(data)),
@@ -63,6 +66,8 @@ contextBridge.exposeInMainWorld('api', {
 
     // Installation
     selectDirectory:      ()             => ipcRenderer.invoke('select-directory'),
+    selectFile:           ()             => ipcRenderer.invoke('select-file'),
+    scanGameFolder:       (p)            => ipcRenderer.invoke('scan-game-folder', p),
     installGame:          (id, dir)      => ipcRenderer.invoke('legendary-install', id, dir),
     cancelInstall:        ()             => ipcRenderer.invoke('legendary-cancel-install'),
     getInstallInfo:       (id)           => ipcRenderer.invoke('legendary-install-info', id),

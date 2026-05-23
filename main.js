@@ -12,7 +12,12 @@ const configDir = app.isPackaged
     : path.join(__dirname, 'GRINDERConfig');
 
 const prefixesDir = path.join(configDir, 'prefixes');
+const logDir      = path.join(configDir, 'game_logs');
 const dbPath      = path.join(configDir, 'grinder.db');
+
+function sanitizeLogName(title) {
+    return (title || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'unknown';
+}
 
 // Directory containing the AppImage (same folder as CNGM.AppImage)
 const appImageDir  = process.env.APPIMAGE ? path.dirname(process.env.APPIMAGE) : configDir;
@@ -228,6 +233,8 @@ function initDb() {
     try { db.prepare("ALTER TABLE games ADD COLUMN use_eac INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN launch_target TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN launch_args TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN is_dlc INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE games ADD COLUMN custom_exe TEXT").run(); } catch(e) {}
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -381,6 +388,7 @@ async function launchGame(gameId) {
     const installPath = expandTilde(game.install_path || '');
     // launch_target overrides the stored executable (e.g. alternate exe from playTasks)
     const resolvedExe = (() => {
+        if (game.custom_exe) return expandTilde(game.custom_exe);
         if (!installPath) return '';
         const rel = game.launch_target || game.executable;
         return rel ? path.join(installPath, ...rel.replace(/\\/g, '/').split('/')) : '';
@@ -447,25 +455,27 @@ async function launchGame(gameId) {
     const baseEnv = (extra = {}) => ({ ...process.env, ...customEnv, ...compatEnv, ...extra });
 
 
-    if (game.store === 'epic') {
-        if (resolvedExe && fs.existsSync(resolvedExe) && umu) {
-            spawn(umu, [launchExe, ...userArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
-            return { ok: true, method: 'umu-run' };
+    if (!resolvedExe || !fs.existsSync(resolvedExe)) {
+        if (game.store === 'epic') {
+            const legendary = findLegendary();
+            if (legendary) {
+                spawn(legendary, ['launch', game.app_id], { detached: true, stdio: 'ignore' }).unref();
+                return { ok: true, method: 'legendary' };
+            }
+            throw new Error('Cannot launch: exe not found, umu-run not available, and legendary not found.');
         }
-        const legendary = findLegendary();
-        if (legendary) {
-            spawn(legendary, ['launch', game.app_id], { detached: true, stdio: 'ignore' }).unref();
-            return { ok: true, method: 'legendary' };
-        }
-        throw new Error('Cannot launch: exe not found, umu-run not available, and legendary not found.');
+        throw new Error(`Executable not found: ${resolvedExe || '(not set)'}`);
     }
-
-    if (!resolvedExe || !fs.existsSync(resolvedExe)) throw new Error(`Executable not found: ${resolvedExe || '(not set)'}`);
 
     // .bat files must be launched via Wine's Z: drive Windows path — Proton/wine
     // can't run .bat from a raw Linux path. Z: maps to the filesystem root.
     const isBat = resolvedExe.toLowerCase().endsWith('.bat');
     const launchExe = isBat ? ('Z:' + resolvedExe.replace(/\//g, '\\')) : resolvedExe;
+
+    if (game.store === 'epic' && umu) {
+        spawn(umu, [launchExe, ...userArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'umu-run' };
+    }
 
     if (game.platform === 'linux') {
         try { fs.chmodSync(resolvedExe, '755'); } catch {}
@@ -588,7 +598,7 @@ ipcMain.handle('add-game', (_, data) => {
 });
 
 ipcMain.handle('update-game', (_, id, data) => {
-    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks','use_esync','use_fsync','use_dxvk_nvapi','use_battleye','use_eac','launch_target','launch_args'];
+    const allowed = ['title','store','app_id','install_path','executable','prefix_path','proton_path','installed','version','notes','platform','platforms','custom_env','winetricks','use_esync','use_fsync','use_dxvk_nvapi','use_battleye','use_eac','launch_target','launch_args','custom_exe'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
     if (!entries.length) return false;
     const set = entries.map(([k]) => `${k}=?`).join(', ');
@@ -654,9 +664,45 @@ ipcMain.handle('uninstall-game-files', async (_, id) => {
     return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true };
 });
 
+function appendGameLog(game, method, error) {
+    try {
+        fs.mkdirSync(logDir, { recursive: true });
+        const logPath = path.join(logDir, sanitizeLogName(game.title) + '.md');
+        const ts = new Date().toLocaleString('sv-SE').replace('T', ' ');
+        const existed = fs.existsSync(logPath);
+        let header = '';
+        if (!existed) {
+            header = `# Game Launch Log: ${game.title}\n\n`;
+        }
+        const entry = [
+            `## ${ts}`,
+            ``,
+            `| Field | Value |`,
+            `|---|---|`,
+            `| Store | ${game.store || '—'} |`,
+            `| App ID | ${game.app_id || '—'} |`,
+            `| Method | ${method || '—'} |`,
+            `| Executable | \`${game.executable || '—'}\` |`,
+            `| Install Path | \`${game.install_path || '—'}\` |`,
+            `| Proton | \`${game.proton_path || '(default)'}\` |`,
+            `| Prefix | \`${game.prefix_path || '(auto)'}\` |`,
+            `| Status | ${error ? `**ERROR**: ${error}` : '**OK**'} |`,
+            ``,
+        ].join('\n');
+        fs.appendFileSync(logPath, header + entry + '\n');
+    } catch {}
+}
+
 ipcMain.handle('launch-game', async (_, gameId) => {
-    try   { return await launchGame(gameId); }
-    catch (e) { return { ok: false, error: e.message }; }
+    const game = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+    try {
+        const result = await launchGame(gameId);
+        if (game) appendGameLog(game, result.method, null);
+        return result;
+    } catch (e) {
+        if (game) appendGameLog(game, null, e.message);
+        return { ok: false, error: e.message };
+    }
 });
 
 // Settings
@@ -830,6 +876,80 @@ ipcMain.handle('get-all-disk-sizes', () => {
     }));
 });
 ipcMain.handle('get-config-dir', () => configDir);
+ipcMain.handle('open-config-dir', () => shell.openPath(configDir));
+
+ipcMain.handle('get-game-log', (_, gameId) => {
+    const game = db.prepare('SELECT title FROM games WHERE id = ?').get(gameId);
+    if (!game) return { exists: false, content: '' };
+    const logPath = path.join(logDir, sanitizeLogName(game.title) + '.md');
+    if (!fs.existsSync(logPath)) return { exists: false, content: '' };
+    return { exists: true, content: fs.readFileSync(logPath, 'utf8') };
+});
+
+ipcMain.handle('get-log-index', () => {
+    if (!fs.existsSync(logDir)) return [];
+    const files = new Set(fs.readdirSync(logDir).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3)));
+    return db.prepare('SELECT id, title FROM games').all()
+        .filter(g => files.has(sanitizeLogName(g.title)))
+        .map(g => g.id);
+});
+
+// Scan an existing game folder to detect store/app_id markers
+ipcMain.handle('scan-game-folder', (_, folderPath) => {
+    const expanded = expandTilde(folderPath);
+    if (!expanded || !fs.existsSync(expanded)) return { ok: false, error: 'Folder not found.' };
+
+    const detected = [];
+    let exes = [];
+
+    try {
+        const entries = fs.readdirSync(expanded);
+
+        // Top-level executables the user might want to set
+        exes = entries.filter(f => /\.(exe|sh|bat)$/i.test(f));
+
+        // GOG: goggame-{numericId}.info files at folder root
+        for (const f of entries) {
+            const m = f.match(/^goggame-(\d+)\.info$/i);
+            if (!m) continue;
+            const appId = m[1];
+            let title = appId;
+            let executable = null;
+            try {
+                const info = JSON.parse(fs.readFileSync(path.join(expanded, f), 'utf8'));
+                title = info.gameTitle || info.gameId || appId;
+                const primary = (info.playTasks || []).find(t => t.isPrimary && t.type === 'FileTask');
+                if (primary?.path) executable = primary.path.replace(/\\/g, '/');
+            } catch {}
+            detected.push({ store: 'gog', app_id: appId, title, executable });
+        }
+
+        // Epic: .egstore/ directory contains *.item JSON manifests
+        const egstoreDir = path.join(expanded, '.egstore');
+        if (fs.existsSync(egstoreDir)) {
+            try {
+                for (const f of fs.readdirSync(egstoreDir)) {
+                    if (!f.endsWith('.item')) continue;
+                    try {
+                        const item = JSON.parse(fs.readFileSync(path.join(egstoreDir, f), 'utf8'));
+                        if (item.AppName) {
+                            detected.push({
+                                store: 'epic',
+                                app_id: item.AppName,
+                                title: item.DisplayName || item.AppName,
+                                executable: item.LaunchExecutable ? item.LaunchExecutable.replace(/\\/g, '/') : null,
+                            });
+                        }
+                    } catch {}
+                }
+            } catch {}
+        }
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+
+    return { ok: true, detected, exes };
+});
 
 // Proton
 ipcMain.handle('scan-proton', () => scanProtonVersions());
@@ -1084,6 +1204,15 @@ ipcMain.handle('select-directory', async () => {
     const result = await dialog.showOpenDialog(win, {
         title: 'Choose Install Directory',
         properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+});
+
+// File picker dialog (for custom exe selection)
+ipcMain.handle('select-file', async () => {
+    const result = await dialog.showOpenDialog(win, {
+        title: 'Select Executable',
+        properties: ['openFile'],
     });
     return result.canceled ? null : result.filePaths[0];
 });
@@ -1542,7 +1671,8 @@ ipcMain.handle('gog-list-owned', async () => {
                 const oses      = [...new Set((item.downloads?.installers || []).map(x => x.os).filter(Boolean))];
                 const platform  = oses.includes('linux') ? 'linux' : 'windows';
                 const platforms = oses.filter(o => o === 'linux' || o === 'windows').join(',') || platform;
-                games.push({ id: String(item.id), title: item.title || 'Unknown', platform, platforms });
+                const is_dlc    = item.game_type && item.game_type !== 'game' ? 1 : 0;
+                games.push({ id: String(item.id), title: item.title || 'Unknown', platform, platforms, is_dlc });
             }
         }
         return { ok: true, games };
@@ -1551,18 +1681,19 @@ ipcMain.handle('gog-list-owned', async () => {
 
 ipcMain.handle('gog-import', (_, games) => {
     const stmtInsert = db.prepare(
-        "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, platforms, installed) VALUES (?, ?, 'gog', ?, ?, ?, 0)"
+        "INSERT OR IGNORE INTO games (id, title, store, app_id, platform, platforms, installed, is_dlc) VALUES (?, ?, 'gog', ?, ?, ?, 0, ?)"
     );
-    // Always update platforms so re-importing populates missing data
-    const stmtPlatforms = db.prepare(
-        "UPDATE games SET platforms = ? WHERE app_id = ? AND store = 'gog'"
+    // Always update platforms + is_dlc so re-importing refreshes metadata
+    const stmtUpdate = db.prepare(
+        "UPDATE games SET platforms = ?, is_dlc = ? WHERE app_id = ? AND store = 'gog'"
     );
     const tx = db.transaction(list => {
         let n = 0;
         for (const g of list) {
-            const plats = g.platforms || g.platform || 'windows';
-            stmtInsert.run('gog_' + g.id, g.title, g.id, g.platform || 'windows', plats);
-            stmtPlatforms.run(plats, g.id);
+            const plats  = g.platforms || g.platform || 'windows';
+            const is_dlc = g.is_dlc ? 1 : 0;
+            stmtInsert.run('gog_' + g.id, g.title, g.id, g.platform || 'windows', plats, is_dlc);
+            stmtUpdate.run(plats, is_dlc, g.id);
             n++;
         }
         return n;
