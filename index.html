@@ -840,6 +840,55 @@
     </div>
   </div>
 
+  <!-- Reset GRINDER confirmation modal -->
+  <div id="modal-reset-grinder" class="modal-overlay" style="z-index:800;">
+    <div class="modal-box" style="max-width:500px; border-color:rgba(239,83,80,0.4); gap:16px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <h3 style="margin:0; font-size:15px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#ef5350;">Reset GRINDER</h3>
+      </div>
+      <p style="font-size:14px; color:var(--text_sec); line-height:1.7; margin:0;">You are about to wipe GRINDER's entire game library and all Wine environments. The following will be <strong style="color:#ef5350;">permanently deleted</strong>:</p>
+      <div style="background:rgba(198,40,40,0.07); border:1px solid rgba(239,83,80,0.25); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All game entries, launch configurations, and stored settings</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All Wine prefixes — including <strong>save games</strong>, registry entries, and software installed inside each prefix</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All game launch logs</span></div>
+      </div>
+      <p style="font-size:13px; color:var(--text_dim); line-height:1.6; margin:0;">Your GOG and Epic accounts will remain logged in. Game files on disk will <strong style="color:var(--text_sec);">not</strong> be deleted — only GRINDER's records of them.</p>
+      <p style="font-size:13px; font-weight:900; color:#ef5350; letter-spacing:1px; text-transform:uppercase; margin:0;">This action cannot be undone.</p>
+      <div class="modal-actions" style="margin-top:4px;">
+        <button id="btn-reset-grinder-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
+        <button id="btn-reset-grinder-confirm" style="background:rgba(198,40,40,0.2); border:1px solid #c62828; color:#ef5350; font-weight:900; letter-spacing:1px;">Reset Everything</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete All GRINDER Data confirmation modal -->
+  <div id="modal-delete-grinder-data" class="modal-overlay" style="z-index:800;">
+    <div class="modal-box" style="max-width:520px; border-color:rgba(198,40,40,0.6); box-shadow:0 20px 60px rgba(198,40,40,0.15), 0 20px 50px rgba(0,0,0,0.8); gap:16px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        <h3 style="margin:0; font-size:15px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#c62828;">Delete All GRINDER Data</h3>
+      </div>
+      <p style="font-size:14px; color:var(--text_sec); line-height:1.7; margin:0;">This will delete GRINDER's entire data folder from your disk. <strong style="color:#ef5350;">Everything</strong> stored by GRINDER will be gone:</p>
+      <div style="background:rgba(198,40,40,0.1); border:1px solid rgba(198,40,40,0.4); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>Game library database and all configurations</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All Wine prefixes — including <strong>save games</strong>, registry, and installed software</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>GOG authentication tokens and downloaded manifests</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>Game launch logs and redistributable cache</span></div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All saved settings</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04); border:1px solid var(--border_solid); border-radius:8px; padding:12px 16px;">
+        <p style="font-size:13px; color:var(--text_sec); line-height:1.6; margin:0;"><strong style="color:var(--text_main);">This is halfway to uninstalling GRINDER.</strong> After this operation, GRINDER will quit. To finish uninstalling, delete the AppImage file manually.</p>
+        <p style="font-size:13px; color:var(--text_dim); margin:8px 0 0; line-height:1.6;">Not affected: Epic Games auth (<code style="font-size:12px; background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">~/.config/legendary/</code>), game files on disk, and GE-Proton installations.</p>
+      </div>
+      <p style="font-size:13px; font-weight:900; color:#c62828; letter-spacing:1px; text-transform:uppercase; margin:0;">GRINDER will quit immediately after deletion. This cannot be undone.</p>
+      <div class="modal-actions" style="margin-top:4px;">
+        <button id="btn-delete-data-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
+        <button id="btn-delete-data-confirm" style="background:rgba(198,40,40,0.25); border:1px solid #c62828; color:#ef5350; font-weight:900; letter-spacing:1px;">Delete All Data</button>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 
   <!-- Now Playing overlay -->
@@ -900,54 +949,6 @@
     </div>
   </div>
 
-  <!-- Reset GRINDER confirmation modal -->
-  <div id="modal-reset-grinder" class="modal-overlay" style="z-index:800;">
-    <div class="modal-box" style="max-width:500px; border-color:rgba(239,83,80,0.4); gap:16px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <h3 style="margin:0; font-size:15px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#ef5350;">Reset GRINDER</h3>
-      </div>
-      <p style="font-size:14px; color:var(--text_sec); line-height:1.7; margin:0;">You are about to wipe GRINDER's entire game library and all Wine environments. The following will be <strong style="color:#ef5350;">permanently deleted</strong>:</p>
-      <div style="background:rgba(198,40,40,0.07); border:1px solid rgba(239,83,80,0.25); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All game entries, launch configurations, and stored settings</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All Wine prefixes — including <strong>save games</strong>, registry entries, and software installed inside each prefix</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef9a9a;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All game launch logs</span></div>
-      </div>
-      <p style="font-size:13px; color:var(--text_dim); line-height:1.6; margin:0;">Your GOG and Epic accounts will remain logged in. Game files on disk will <strong style="color:var(--text_sec);">not</strong> be deleted — only GRINDER's records of them.</p>
-      <p style="font-size:13px; font-weight:900; color:#ef5350; letter-spacing:1px; text-transform:uppercase; margin:0;">This action cannot be undone.</p>
-      <div class="modal-actions" style="margin-top:4px;">
-        <button id="btn-reset-grinder-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
-        <button id="btn-reset-grinder-confirm" style="background:rgba(198,40,40,0.2); border:1px solid #c62828; color:#ef5350; font-weight:900; letter-spacing:1px;">Reset Everything</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Delete All GRINDER Data confirmation modal -->
-  <div id="modal-delete-grinder-data" class="modal-overlay" style="z-index:800;">
-    <div class="modal-box" style="max-width:520px; border-color:rgba(198,40,40,0.6); box-shadow:0 20px 60px rgba(198,40,40,0.15), 0 20px 50px rgba(0,0,0,0.8); gap:16px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-        <h3 style="margin:0; font-size:15px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#c62828;">Delete All GRINDER Data</h3>
-      </div>
-      <p style="font-size:14px; color:var(--text_sec); line-height:1.7; margin:0;">This will delete GRINDER's entire data folder from your disk. <strong style="color:#ef5350;">Everything</strong> stored by GRINDER will be gone:</p>
-      <div style="background:rgba(198,40,40,0.1); border:1px solid rgba(198,40,40,0.4); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>Game library database and all configurations</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All Wine prefixes — including <strong>save games</strong>, registry, and installed software</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>GOG authentication tokens and downloaded manifests</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>Game launch logs and redistributable cache</span></div>
-        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#ef5350;"><span style="flex-shrink:0; margin-top:1px;">✕</span><span>All saved settings</span></div>
-      </div>
-      <div style="background:rgba(255,255,255,0.04); border:1px solid var(--border_solid); border-radius:8px; padding:12px 16px;">
-        <p style="font-size:13px; color:var(--text_sec); line-height:1.6; margin:0;"><strong style="color:var(--text_main);">This is halfway to uninstalling GRINDER.</strong> After this operation, GRINDER will quit. To finish uninstalling, delete the AppImage file manually.</p>
-        <p style="font-size:13px; color:var(--text_dim); margin:8px 0 0; line-height:1.6;">Not affected: Epic Games auth (<code style="font-size:12px; background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">~/.config/legendary/</code>), game files on disk, and GE-Proton installations.</p>
-      </div>
-      <p style="font-size:13px; font-weight:900; color:#c62828; letter-spacing:1px; text-transform:uppercase; margin:0;">GRINDER will quit immediately after deletion. This cannot be undone.</p>
-      <div class="modal-actions" style="margin-top:4px;">
-        <button id="btn-delete-data-cancel" style="background:transparent; border:1px solid var(--border_solid); color:var(--text_sec);">Cancel</button>
-        <button id="btn-delete-data-confirm" style="background:rgba(198,40,40,0.25); border:1px solid #c62828; color:#ef5350; font-weight:900; letter-spacing:1px;">Delete All Data</button>
-      </div>
-    </div>
-  </div>
 
 </body>
 </html>
