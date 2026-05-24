@@ -235,6 +235,17 @@ function initDb() {
     try { db.prepare("ALTER TABLE games ADD COLUMN launch_args TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN is_dlc INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE games ADD COLUMN custom_exe TEXT").run(); } catch(e) {}
+    try { db.exec(`CREATE TABLE IF NOT EXISTS achievements (
+        app_id         TEXT NOT NULL,
+        key            TEXT NOT NULL,
+        name           TEXT,
+        description    TEXT,
+        image_locked   TEXT,
+        image_unlocked TEXT,
+        date_unlocked  TEXT,
+        visible        INTEGER DEFAULT 1,
+        PRIMARY KEY (app_id, key)
+    )`); } catch(e) {}
 }
 
 // ── Proton scanner ────────────────────────────────────────────────────────────
@@ -309,6 +320,31 @@ function expandTilde(p) {
     return p;
 }
 
+// Resolves a file path case-insensitively, segment by segment.
+// Needed because GOG manifests declare Windows-style casing (e.g. DOOM3.exe)
+// while the installer writes different casing on disk (e.g. Doom3.exe).
+function resolvePathCaseInsensitive(filePath) {
+    if (!filePath) return filePath;
+    if (fs.existsSync(filePath)) return filePath;
+    // Split and filter empty strings — leading '/' on absolute paths produces an
+    // empty first element that would cause path.join to build a relative path.
+    const isAbs = path.isAbsolute(filePath);
+    const parts  = filePath.split(path.sep).filter(p => p !== '');
+    let resolved = isAbs ? path.sep : parts[0];
+    const start  = isAbs ? 0 : 1;
+    for (let i = start; i < parts.length; i++) {
+        const segment = parts[i];
+        const exact   = path.join(resolved, segment);
+        if (fs.existsSync(exact)) { resolved = exact; continue; }
+        try {
+            const match = fs.readdirSync(resolved).find(e => e.toLowerCase() === segment.toLowerCase());
+            if (match) { resolved = path.join(resolved, match); }
+            else       { resolved = path.join(resolved, ...parts.slice(i)); break; }
+        } catch     { resolved = path.join(resolved, ...parts.slice(i)); break; }
+    }
+    return resolved;
+}
+
 // ── Bundled binary paths ──────────────────────────────────────────────────────
 // In packaged AppImage, extraResources land in process.resourcesPath/assets/bin/linux.
 // In dev, they live in __dirname/assets/bin/linux.
@@ -318,6 +354,7 @@ const binDir = app.isPackaged
 
 const BUNDLED_LEGENDARY = path.join(binDir, 'legendary');
 const BUNDLED_GOGDL     = path.join(binDir, 'gogdl');
+const BUNDLED_COMET     = path.join(binDir, 'comet');
 
 // ── External tool helpers ─────────────────────────────────────────────────────
 function which(bin) {
@@ -326,7 +363,7 @@ function which(bin) {
 }
 
 // Tool paths resolved once at startup — avoids repeated execSync('which ...') on every launch/IPC call
-let _legendary = null, _gogdl = null, _umu = null, _wine = null;
+let _legendary = null, _gogdl = null, _comet = null, _umu = null, _wine = null;
 function findLegendary() {
     if (_legendary !== null) return _legendary;
     _legendary = fs.existsSync(BUNDLED_LEGENDARY) ? BUNDLED_LEGENDARY : (which('legendary') || '');
@@ -336,6 +373,11 @@ function findGogdl() {
     if (_gogdl !== null) return _gogdl;
     _gogdl = fs.existsSync(BUNDLED_GOGDL) ? BUNDLED_GOGDL : (which('gogdl') || '');
     return _gogdl || null;
+}
+function findComet() {
+    if (_comet !== null) return _comet;
+    _comet = fs.existsSync(BUNDLED_COMET) ? BUNDLED_COMET : (which('comet') || '');
+    return _comet || null;
 }
 function findUmu() {
     if (_umu !== null) return _umu;
@@ -387,12 +429,13 @@ async function launchGame(gameId) {
 
     const installPath = expandTilde(game.install_path || '');
     // launch_target overrides the stored executable (e.g. alternate exe from playTasks)
-    const resolvedExe = (() => {
+    // resolvePathCaseInsensitive handles GOG manifests declaring wrong casing (e.g. DOOM3.exe → Doom3.exe)
+    const resolvedExe = resolvePathCaseInsensitive((() => {
         if (game.custom_exe) return expandTilde(game.custom_exe);
         if (!installPath) return '';
         const rel = game.launch_target || game.executable;
         return rel ? path.join(installPath, ...rel.replace(/\\/g, '/').split('/')) : '';
-    })();
+    })());
 
     // Read arguments for the active task from goggame-*.info (GOG only).
     // GOG stores launch arguments in playTasks — without them mods/configs don't load.
@@ -454,6 +497,38 @@ async function launchGame(gameId) {
     // Base env: system → custom user vars → compat flags → GRINDER's required vars (highest priority)
     const baseEnv = (extra = {}) => ({ ...process.env, ...customEnv, ...compatEnv, ...extra });
 
+    // Launch Comet sidecar for GOG games (enables achievement unlocking via Galaxy SDK proxy)
+    let cometProc = null;
+    if (game.store === 'gog') {
+        const cometBin = findComet();
+        if (cometBin) {
+            const userId = db.prepare("SELECT value FROM settings WHERE key='gog_user_id'").get()?.value;
+            if (userId) {
+                try { fs.chmodSync(cometBin, '755'); } catch {}
+                const authPath = writeGogAuthConfig();
+                const cometArgs = ['--from-heroic', '--credentials-path', authPath, '--user-id', userId];
+                // Include per-game Galaxy client_id if available in goggame-*.info
+                if (installPath && game.app_id) {
+                    try {
+                        const infoPath = path.join(installPath, `goggame-${game.app_id}.info`);
+                        if (fs.existsSync(infoPath)) {
+                            const info = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+                            if (info.clientId) cometArgs.push('--game-id', info.clientId);
+                        }
+                    } catch {}
+                }
+                try { cometProc = spawn(cometBin, cometArgs, { stdio: 'ignore' }); } catch {}
+            }
+        }
+    }
+
+    const spawnGame = (cmd, args, opts) => {
+        const proc = spawn(cmd, args, opts);
+        if (cometProc) proc.once('exit', () => { try { cometProc.kill('SIGTERM'); } catch {} });
+        proc.unref();
+        if (cometProc) cometProc.unref();
+        return proc;
+    };
 
     if (!resolvedExe || !fs.existsSync(resolvedExe)) {
         if (game.store === 'epic') {
@@ -473,18 +548,18 @@ async function launchGame(gameId) {
     const launchExe = isBat ? ('Z:' + resolvedExe.replace(/\//g, '\\')) : resolvedExe;
 
     if (game.store === 'epic' && umu) {
-        spawn(umu, [launchExe, ...userArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        spawnGame(umu, [launchExe, ...userArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' });
         return { ok: true, method: 'umu-run' };
     }
 
     if (game.platform === 'linux') {
         try { fs.chmodSync(resolvedExe, '755'); } catch {}
-        spawn(resolvedExe, [...userArgs], { cwd: installPath || undefined, env: baseEnv(), detached: true, stdio: 'ignore' }).unref();
+        spawnGame(resolvedExe, [...userArgs], { cwd: installPath || undefined, env: baseEnv(), detached: true, stdio: 'ignore' });
         return { ok: true, method: 'native' };
     }
 
     if (umu) {
-        spawn(umu, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' }).unref();
+        spawnGame(umu, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, PROTONPATH: proton, GAMEID: game.app_id || `grinder-${gameId}` }), detached: true, stdio: 'ignore' });
         return { ok: true, method: isBat ? 'umu-run-bat' : 'umu-run' };
     }
 
@@ -492,13 +567,13 @@ async function launchGame(gameId) {
         const steamRoot = which('steam') ? path.dirname(which('steam')) : path.join(HOME, '.steam', 'root');
         const protonBin = path.join(proton, 'proton');
         if (!fs.existsSync(protonBin)) throw new Error(`proton script not found in ${proton}`);
-        spawn(protonBin, ['run', launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' }).unref();
+        spawnGame(protonBin, ['run', launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix, STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot }), detached: true, stdio: 'ignore' });
         return { ok: true, method: isBat ? 'proton-bat' : 'proton-direct' };
     }
 
     const wine = findWineCached();
     if (!wine) throw new Error('No launch method: umu-run not found, no Proton path set, wine not installed.');
-    spawn(wine, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' }).unref();
+    spawnGame(wine, [launchExe, ...allArgs], { cwd: installPath || undefined, env: baseEnv({ WINEPREFIX: prefix }), detached: true, stdio: 'ignore' });
     return { ok: true, method: 'wine' };
 }
 
@@ -1494,6 +1569,54 @@ ipcMain.handle('get-play-tasks', (_, gameId) => {
 });
 
 // Run any .exe / .msi inside the game's Wine prefix (mod installers, tools, etc.)
+// Inject GOG game registry entries into a Wine prefix so DLC/tool .exe installers
+// can detect the base game (they check HKLM\SOFTWARE\GOG.com\Games\<ID>\path).
+// Wine maps Z:\ to the filesystem root, so Linux paths are reachable via Z:\.
+async function injectGogRegistry(game, prefix, proton) {
+    const installPath = expandTilde(game.install_path || '');
+    if (!installPath || !game.app_id) return;
+    if (!(game.store || '').toLowerCase().includes('gog')) return;
+
+    const appId   = String(game.app_id);
+    const winPath = ('Z:' + installPath).replace(/\//g, '\\');
+    const escaped = winPath.replace(/\\/g, '\\\\');
+
+    const regContent =
+        'Windows Registry Editor Version 5.00\r\n\r\n' +
+        `[HKEY_LOCAL_MACHINE\\SOFTWARE\\GOG.com\\Games\\${appId}]\r\n` +
+        `"path"="${escaped}"\r\n` +
+        `"gameID"="${appId}"\r\n` +
+        `"productID"="${appId}"\r\n\r\n` +
+        `[HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${appId}]\r\n` +
+        `"path"="${escaped}"\r\n` +
+        `"gameID"="${appId}"\r\n` +
+        `"productID"="${appId}"\r\n`;
+
+    const regFile = path.join(os.tmpdir(), `gog_reg_${appId}.reg`);
+    fs.writeFileSync(regFile, regContent, 'utf8');
+
+    // Find Wine binary: prefer Proton's bundled wine, fall back to system wine
+    let wineBin = 'wine';
+    if (proton) {
+        const candidates = [
+            path.join(proton, 'files', 'bin', 'wine64'),
+            path.join(proton, 'files', 'bin', 'wine'),
+        ];
+        for (const c of candidates) {
+            if (fs.existsSync(c)) { wineBin = c; break; }
+        }
+    }
+
+    await new Promise(resolve => {
+        const proc = spawn(wineBin, ['regedit', '/S', regFile], {
+            env: { ...process.env, WINEPREFIX: prefix, WINEDEBUG: '-all' },
+            stdio: 'ignore',
+        });
+        proc.on('close', () => { try { fs.unlinkSync(regFile); } catch {} resolve(); });
+        proc.on('error', () => { try { fs.unlinkSync(regFile); } catch {} resolve(); });
+    });
+}
+
 ipcMain.handle('run-exe-on-prefix', async (_, gameId) => {
     const result = await dialog.showOpenDialog(win, {
         title: 'Select executable to run in game prefix',
@@ -1513,6 +1636,57 @@ ipcMain.handle('run-exe-on-prefix', async (_, gameId) => {
     const proton = expandTilde(game.proton_path)
         || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value || '';
     fs.mkdirSync(prefix, { recursive: true });
+    await injectGogRegistry(game, prefix, proton);
+    const umu = findUmu();
+    const steamRoot = path.join(HOME, '.steam', 'root');
+
+    const customEnv = {};
+    for (const line of (game.custom_env || '').split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq > 0) customEnv[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+    const env = { ...process.env, ...customEnv, WINEPREFIX: prefix,
+                  STEAM_COMPAT_DATA_PATH: prefix, STEAM_COMPAT_CLIENT_INSTALL_PATH: steamRoot,
+                  GAMEID: 'umu-0', PROTON_VERB: 'run' };
+    if (proton) env.PROTONPATH = proton;
+
+    if (umu && proton) {
+        spawn(umu, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'umu-run' };
+    }
+    if (proton) {
+        const protonBin = path.join(proton, 'proton');
+        spawn(protonBin, ['run', exe], { env, detached: true, stdio: 'ignore' }).unref();
+        return { ok: true, method: 'proton-direct' };
+    }
+    const wine = findWineCached();
+    if (!wine) return { ok: false, error: 'No runner: umu-run not found, no Proton set, wine not installed.' };
+    spawn(wine, [exe], { env, detached: true, stdio: 'ignore' }).unref();
+    return { ok: true, method: 'wine' };
+});
+
+ipcMain.handle('run-exe-in-game-folder', async (_, gameId) => {
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
+    if (!game) return { ok: false, error: 'Game not found' };
+
+    const installDir = expandTilde(game.install_path) || undefined;
+    const result = await dialog.showOpenDialog(win, {
+        title: 'Select executable in game folder',
+        defaultPath: installDir,
+        filters: [{ name: 'Windows Executables', extensions: ['exe', 'msi', 'bat'] }],
+        properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true };
+
+    const exe = result.filePaths[0];
+    const prefix = expandTilde(game.prefix_path) || (() => {
+        const safeName = (game.title || gameId).replace(/[/\\:*?"<>|]/g, '').trim().slice(0, 64) || gameId;
+        return path.join(prefixesDir, safeName);
+    })();
+    const proton = expandTilde(game.proton_path)
+        || db.prepare("SELECT value FROM settings WHERE key='default_proton_path'").get()?.value || '';
+    fs.mkdirSync(prefix, { recursive: true });
+    await injectGogRegistry(game, prefix, proton);
     const umu = findUmu();
     const steamRoot = path.join(HOME, '.steam', 'root');
 
@@ -1730,6 +1904,78 @@ ipcMain.handle('gog-sync-platforms', (_, games) => {
     catch (e) { return { ok: false, error: e.message }; }
 });
 
+// ── GOG Achievements ──────────────────────────────────────────────────────────
+
+ipcMain.handle('fetch-gog-achievements', async (_, appId) => {
+    const token = await getGogToken();
+    if (!token) return { ok: false, error: 'not_logged_in' };
+    const userId = db.prepare("SELECT value FROM settings WHERE key='gog_user_id'").get()?.value;
+    if (!userId) return { ok: false, error: 'no_user_id' };
+    try {
+        const data = await gogFetch(
+            `https://gameplay.gog.com/clients/${appId}/users/${userId}/achievements`, token
+        );
+        const items = data.items || [];
+        const upsert = db.prepare(`
+            INSERT OR REPLACE INTO achievements
+            (app_id, key, name, description, image_locked, image_unlocked, date_unlocked, visible)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const tx = db.transaction(list => {
+            for (const a of list) {
+                upsert.run(
+                    appId,
+                    a.achievement_key,
+                    a.name,
+                    a.description,
+                    a.image_url_locked,
+                    a.image_url_unlocked,
+                    a.date_unlocked || null,
+                    a.visible === false ? 0 : 1
+                );
+            }
+        });
+        tx(items);
+
+        // Mirror to shared DB so CNGM / CREMA can read without opening GRINDER's DB
+        try {
+            const sharedDbPath = path.join(appImageDir, 'GameManagerConfig', 'games.db');
+            if (fs.existsSync(sharedDbPath)) {
+                const sdb = new Database(sharedDbPath);
+                sdb.exec(`CREATE TABLE IF NOT EXISTS achievements (
+                    app_id TEXT NOT NULL, key TEXT NOT NULL, name TEXT,
+                    description TEXT, image_locked TEXT, image_unlocked TEXT,
+                    date_unlocked TEXT, visible INTEGER DEFAULT 1,
+                    PRIMARY KEY (app_id, key)
+                )`);
+                const sup = sdb.prepare(`INSERT OR REPLACE INTO achievements
+                    (app_id, key, name, description, image_locked, image_unlocked, date_unlocked, visible)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+                const stx = sdb.transaction(list => {
+                    for (const a of list) sup.run(
+                        appId, a.achievement_key, a.name, a.description,
+                        a.image_url_locked, a.image_url_unlocked, a.date_unlocked || null,
+                        a.visible === false ? 0 : 1
+                    );
+                });
+                stx(items);
+                sdb.close();
+            }
+        } catch {}
+
+        return { ok: true, count: items.length };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('get-gog-achievements', (_, appId) => {
+    try {
+        const rows = db.prepare(
+            "SELECT * FROM achievements WHERE app_id = ? ORDER BY date_unlocked DESC, name COLLATE NOCASE"
+        ).all(appId);
+        return { ok: true, achievements: rows };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+
 // After gogdl installs, find the actual game subfolder and primary exe
 // Detect a successful GOG install by reading the metadata gogdl leaves behind.
 // Windows games: goggame-<id>.info  →  play tasks include the primary executable.
@@ -1826,9 +2072,9 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = fal
             '--path',     gogdlPath,
             '--lang',     'en-US',
         ];
-        if (isDlc && baseAppId) args.push('--dlcs', appId);
+        if (isDlc && baseAppId) { args.push('--dlcs', appId); args.push('--dlc-only'); }
         else if (isDlc)         args.push('--dlc-only');
-        send(`Running: gogdl download ${downloadId} --platform ${platform} --path ${gogdlPath}${isDlc && baseAppId ? ` --dlcs ${appId}` : isDlc ? ' --dlc-only' : ''}\n`);
+        send(`Running: gogdl download ${downloadId} --platform ${platform} --path ${gogdlPath}${isDlc ? ` --dlcs ${appId} --dlc-only` : ''}\n`);
 
         activeGogInstallProc = spawn(gogdl, args, {
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -1887,6 +2133,81 @@ ipcMain.handle('gogdl-cancel-install', () => {
     activeGogInstallProc.kill('SIGTERM');
     activeGogInstallProc = null;
     return { ok: true };
+});
+
+ipcMain.handle('gogdl-repair', (event, gameId) => {
+    if (activeGogInstallProc) return { ok: false, error: 'An installation is already in progress.' };
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
+    if (!game) return { ok: false, error: 'Game not found.' };
+    const installPath = expandTilde(game.install_path || '');
+    if (!installPath || !fs.existsSync(installPath))
+        return { ok: false, error: 'Install path not found. Is the game installed?' };
+
+    const gogdl = findGogdl();
+    if (!gogdl) return { ok: false, error: 'gogdl not found.' };
+    try { fs.chmodSync(gogdl, '755'); } catch {}
+
+    // gogdl --path expects the parent of the game folder (same as at install time)
+    const gogdlPath = path.dirname(installPath);
+    const platform  = game.platform || 'windows';
+    const authPath  = writeGogAuthConfig();
+    const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
+
+    return new Promise(resolve => {
+        send(`Running: gogdl download ${game.app_id} --platform ${platform} --path ${gogdlPath}\n`);
+        activeGogInstallProc = spawn(gogdl, [
+            '--auth-config-path', authPath,
+            'download', String(game.app_id),
+            '--platform', platform,
+            '--path', gogdlPath,
+            '--lang', 'en-US',
+        ], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, GOGDL_CONFIG_PATH: configDir },
+        });
+        activeGogInstallProc.stdout.on('data', send);
+        activeGogInstallProc.stderr.on('data', send);
+        activeGogInstallProc.on('close', code => {
+            activeGogInstallProc = null;
+            try { fs.unlinkSync(authPath); } catch {}
+            resolve({ ok: code === 0, exitCode: code });
+        });
+        activeGogInstallProc.on('error', e => {
+            activeGogInstallProc = null;
+            try { fs.unlinkSync(authPath); } catch {}
+            send(`\nSpawn error: ${e.message}\n`);
+            resolve({ ok: false, error: e.message });
+        });
+    });
+});
+
+ipcMain.handle('legendary-repair', (event, gameId) => {
+    if (activeInstallProc) return { ok: false, error: 'An installation is already in progress.' };
+    const game = db.prepare('SELECT * FROM games WHERE id=?').get(gameId);
+    if (!game) return { ok: false, error: 'Game not found.' };
+
+    const leg = findLegendary();
+    if (!leg) return { ok: false, error: 'legendary not found.' };
+
+    const send = d => { try { event.sender.send('install-progress', String(d)); } catch {} };
+
+    return new Promise(resolve => {
+        send(`Running: legendary install ${game.app_id} --repair\n`);
+        activeInstallProc = spawn(leg, ['install', game.app_id, '--repair', '-y'], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        activeInstallProc.stdout.on('data', send);
+        activeInstallProc.stderr.on('data', send);
+        activeInstallProc.on('close', code => {
+            activeInstallProc = null;
+            resolve({ ok: code === 0, exitCode: code });
+        });
+        activeInstallProc.on('error', e => {
+            activeInstallProc = null;
+            send(`\nSpawn error: ${e.message}\n`);
+            resolve({ ok: false, error: e.message });
+        });
+    });
 });
 
 // umu-run installer — tries pipx first, falls back to pip --user

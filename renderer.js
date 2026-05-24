@@ -380,6 +380,7 @@ function buildFilterBar() {
 function filterGames() {
     const q = document.getElementById('search-input').value.toLowerCase();
     return allGames.filter(g => {
+        if (g.is_dlc) return false;
         if (q && !g.title.toLowerCase().includes(q) &&
             !(g.store||'').toLowerCase().includes(q) &&
             !(g.app_id||'').toLowerCase().includes(q)) return false;
@@ -457,7 +458,10 @@ function openModal(game = null) {
     document.getElementById('edit-battleye').checked       = !!(game?.use_battleye);
     document.getElementById('edit-eac').checked            = !!(game?.use_eac);
     const isGog = (game?.store === 'gog');
-    document.getElementById('edit-gog-compat').style.display = isGog ? 'flex' : 'none';
+    const isGogOrEpic = isGog || game?.store === 'epic';
+    document.getElementById('edit-gog-compat').style.display    = isGog       ? 'flex' : 'none';
+    document.getElementById('edit-verify-repair').style.display = isGogOrEpic ? 'flex' : 'none';
+    document.getElementById('edit-achievements').style.display  = isGog       ? 'flex' : 'none';
 
     // Load play tasks for launch target dropdown (GOG only)
     const launchTargetRow = document.getElementById('edit-launch-target-row');
@@ -476,6 +480,9 @@ function openModal(game = null) {
             });
             launchTargetRow.style.display = 'flex';
         });
+        if (game.app_id) loadAchievements(game.app_id);
+    } else {
+        clearAchievements();
     }
 
     modal.classList.add('active');
@@ -760,7 +767,10 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
 // Toggle store-specific sections when store changes inside the modal
 document.getElementById('edit-store').addEventListener('change', e => {
     const isGog = e.target.value === 'gog';
-    document.getElementById('edit-gog-compat').style.display = isGog ? 'flex' : 'none';
+    const isGogOrEpic = isGog || e.target.value === 'epic';
+    document.getElementById('edit-gog-compat').style.display    = isGog       ? 'flex' : 'none';
+    document.getElementById('edit-verify-repair').style.display = isGogOrEpic ? 'flex' : 'none';
+    document.getElementById('edit-achievements').style.display  = isGog       ? 'flex' : 'none';
     if (!isGog) document.getElementById('edit-launch-target-row').style.display = 'none';
 });
 
@@ -833,6 +843,14 @@ document.getElementById('btn-browse-prefix').addEventListener('click', async () 
     if (err) showAlert('Browse', `Could not open folder: ${err}`);
 });
 
+// Run .exe in Game Folder button
+document.getElementById('btn-run-exe-in-game-folder').addEventListener('click', async () => {
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('Run .exe', 'Save the game first so the install folder and prefix can be resolved.'); return; }
+    const result = await window.api.runExeInGameFolder(gameId);
+    if (result && !result.ok && !result.canceled) showAlert('Run .exe', result.error || 'Could not launch executable.');
+});
+
 // Run .exe on Prefix button
 document.getElementById('btn-run-exe-on-prefix').addEventListener('click', async () => {
     const gameId = document.getElementById('edit-id').value;
@@ -872,6 +890,187 @@ document.getElementById('btn-install-redist').addEventListener('click', async ()
     openCompatModal('GOG Compat Files — ' + game.title);
     window.api.gogInstallRedist(appId, plat, game.install_path, prefix, game.proton_path || null);
 });
+
+// ── GOG Achievements ──────────────────────────────────────────────────────────
+
+function clearAchievements() {
+    document.getElementById('achievements-list').innerHTML = '';
+    document.getElementById('achievements-summary').style.display = 'none';
+    document.getElementById('achievements-status').style.display  = 'none';
+}
+
+function renderAchievements(achievements) {
+    const list = document.getElementById('achievements-list');
+    const summary = document.getElementById('achievements-summary');
+    list.innerHTML = '';
+
+    if (!achievements.length) {
+        list.innerHTML = '<span style="font-size:12px; color:var(--text_dim); font-style:italic;">No achievements found. Click Sync Now to fetch them.</span>';
+        summary.style.display = 'none';
+        return;
+    }
+
+    const unlocked = achievements.filter(a => a.date_unlocked).length;
+    summary.textContent = `${unlocked} / ${achievements.length} unlocked`;
+    summary.style.display = 'block';
+
+    for (const a of achievements) {
+        const isUnlocked = !!a.date_unlocked;
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:5px; background:${isUnlocked ? 'rgba(101,180,101,0.08)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isUnlocked ? 'rgba(101,180,101,0.25)' : 'rgba(255,255,255,0.06)'};`;
+
+        const iconUrl = isUnlocked ? a.image_unlocked : a.image_locked;
+        if (iconUrl) {
+            const img = document.createElement('img');
+            img.src = iconUrl;
+            img.style.cssText = 'width:32px; height:32px; border-radius:3px; object-fit:cover; flex-shrink:0;';
+            img.onerror = () => { img.style.display = 'none'; };
+            row.appendChild(img);
+        } else {
+            const placeholder = document.createElement('div');
+            placeholder.style.cssText = 'width:32px; height:32px; border-radius:3px; background:rgba(255,255,255,0.06); flex-shrink:0;';
+            row.appendChild(placeholder);
+        }
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1; min-width:0;';
+        const title = document.createElement('div');
+        title.style.cssText = `font-size:12px; font-weight:700; color:${isUnlocked ? '#82c882' : 'var(--text_sec)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`;
+        title.textContent = a.name || a.key;
+        info.appendChild(title);
+        if (a.description) {
+            const desc = document.createElement('div');
+            desc.style.cssText = 'font-size:11px; color:var(--text_dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+            desc.textContent = a.description;
+            info.appendChild(desc);
+        }
+        if (isUnlocked) {
+            const date = document.createElement('div');
+            date.style.cssText = 'font-size:10px; color:rgba(130,200,130,0.6); margin-top:2px;';
+            try { date.textContent = new Date(a.date_unlocked).toLocaleDateString(); } catch { date.textContent = a.date_unlocked; }
+            info.appendChild(date);
+        }
+        row.appendChild(info);
+        list.appendChild(row);
+    }
+}
+
+async function loadAchievements(appId) {
+    document.getElementById('achievements-list').innerHTML = '';
+    document.getElementById('achievements-summary').style.display = 'none';
+    const statusEl = document.getElementById('achievements-status');
+    statusEl.textContent = 'Loading…';
+    statusEl.style.display = 'block';
+
+    const res = await window.api.getGogAchievements(appId);
+    statusEl.style.display = 'none';
+    if (res.ok && res.achievements.length) {
+        renderAchievements(res.achievements);
+    } else {
+        document.getElementById('achievements-list').innerHTML =
+            '<span style="font-size:12px; color:var(--text_dim); font-style:italic;">No cached achievements. Click Sync Now to fetch from GOG.</span>';
+    }
+}
+
+document.getElementById('btn-sync-achievements').addEventListener('click', async () => {
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('Achievements', 'Save the game first.'); return; }
+    const game = allGames.find(g => g.id == gameId);
+    if (!game?.app_id) return;
+
+    const btn = document.getElementById('btn-sync-achievements');
+    const statusEl = document.getElementById('achievements-status');
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    statusEl.textContent = 'Fetching from GOG…';
+    statusEl.style.display = 'block';
+
+    const res = await window.api.fetchGogAchievements(game.app_id);
+    btn.disabled = false;
+    btn.textContent = 'Sync Now';
+
+    if (!res.ok) {
+        const msg = res.error === 'not_logged_in' ? 'Not logged in to GOG.'
+                  : res.error === 'no_user_id'    ? 'GOG user ID not found — log in first.'
+                  : res.error;
+        statusEl.textContent = `✗ ${msg}`;
+        return;
+    }
+    statusEl.style.display = 'none';
+    await loadAchievements(game.app_id);
+});
+
+// Verify & Repair button
+document.getElementById('btn-verify-repair').addEventListener('click', async () => {
+    const gameId = document.getElementById('edit-id').value;
+    if (!gameId) { showAlert('Verify & Repair', 'Save the game first.'); return; }
+    const game = allGames.find(g => g.id == gameId);
+    if (!game) return;
+    if (game.store !== 'gog' && game.store !== 'epic')
+        { showAlert('Verify & Repair', 'Only available for GOG and Epic games.'); return; }
+    if (!game.install_path)
+        { showAlert('Verify & Repair', 'Game has no install path — install it first.'); return; }
+    closeModal();
+    beginRepair(game);
+});
+
+async function beginRepair(game) {
+    activeInstallGame = game;
+    installingGame    = game;
+    installActive     = true;
+    _miniPct          = 0;
+
+    document.getElementById('install-modal-title').textContent      = 'Verify & Repair';
+    document.getElementById('install-modal-subtitle').textContent   = game.title;
+    document.getElementById('install-config-panel').style.display   = 'none';
+    document.getElementById('install-progress-panel').style.display = 'flex';
+    document.getElementById('install-done-panel').style.display     = 'none';
+    document.getElementById('install-log').textContent              = '';
+    document.getElementById('install-progress-bar').style.width     = '0%';
+    document.getElementById('install-pct-label').textContent        = '0%';
+    document.getElementById('install-speed-label').textContent      = '';
+    document.getElementById('install-eta-label').textContent        = '';
+    const cancelBtn = document.getElementById('btn-install-cancel-running');
+    cancelBtn.disabled    = false;
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className   = 'btn-danger modal-actions';
+    cancelBtn.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
+    cancelBtn.onclick = null;
+
+    if (!installModalMinimized) modalInstall.classList.add('active');
+    else updateMiniWidget(0);
+    setStatus(`Verifying ${game.title}...`);
+
+    const result = game.store === 'gog'
+        ? await window.api.gogRepair(game.id)
+        : await window.api.epicRepair(game.id);
+
+    installActive = false;
+    document.getElementById('install-progress-panel').style.display = 'none';
+
+    if (result.ok) {
+        activeInstallGame = null;
+        document.getElementById('install-done-msg').textContent = `${game.title} — Repair complete!`;
+        const sub = document.getElementById('install-done-sub');
+        if (sub) sub.textContent = 'All game files verified and repaired.';
+        document.getElementById('install-done-panel').style.display = 'flex';
+        setStatus(`${game.title} repaired successfully.`);
+        updateMiniWidget();
+    } else {
+        document.getElementById('install-log').textContent +=
+            `\n✗ Repair failed (${result.exitCode ?? result.error ?? 'error'}).\n`;
+        document.getElementById('install-progress-panel').style.display = 'flex';
+        const cb = document.getElementById('btn-install-cancel-running');
+        cb.textContent  = 'Close';
+        cb.className    = 'btn-cancel';
+        cb.style.cssText = 'padding:9px 18px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; cursor:pointer; align-self:flex-start;';
+        cb.onclick = closeInstallModal;
+        setStatus(`Repair of ${game.title} failed.`);
+        activeInstallGame = null;
+        if (installModalMinimized) restoreInstallModal();
+        updateMiniWidget();
+    }
+}
 
 // ── Installation ──────────────────────────────────────────────────────────────
 const modalInstall    = document.getElementById('modal-install');

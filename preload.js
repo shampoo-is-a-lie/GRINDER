@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('api', {
     onUmuInstallProgress: (cb) => ipcRenderer.on('umu-install-progress', (_, data) => cb(data)),
 
     // GOG
+    fetchGogAchievements: (appId) => ipcRenderer.invoke('fetch-gog-achievements', appId),
+    getGogAchievements:   (appId) => ipcRenderer.invoke('get-gog-achievements', appId),
     gogStatus:          ()                    => ipcRenderer.invoke('gog-status'),
     gogLogin:           ()                    => ipcRenderer.invoke('gog-login'),
     gogLogout:          ()                    => ipcRenderer.invoke('gog-logout'),
@@ -52,6 +54,8 @@ contextBridge.exposeInMainWorld('api', {
     gogSyncPlatforms:   (games)               => ipcRenderer.invoke('gog-sync-platforms', games),
     gogInstall:         (id, platform, dir, isDlc, baseAppId) => ipcRenderer.invoke('gogdl-install', id, platform, dir, isDlc, baseAppId),
     gogCancelInstall:   ()                    => ipcRenderer.invoke('gogdl-cancel-install'),
+    gogRepair:          (id)                  => ipcRenderer.invoke('gogdl-repair', id),
+    epicRepair:         (id)                  => ipcRenderer.invoke('legendary-repair', id),
     onGogLoginProgress:   (cb) => ipcRenderer.on('gog-login-progress',   (_, d) => cb(d)),
     onGogInstallProgress: (cb) => ipcRenderer.on('gog-install-progress', (_, d) => cb(d)),
     onCliSearch:          (cb) => ipcRenderer.on('cli-search', (_, term) => cb(term)),
@@ -90,7 +94,8 @@ contextBridge.exposeInMainWorld('api', {
 
     // Play tasks + run-exe
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
-    runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),
+    runExeOnPrefix:       (id) => ipcRenderer.invoke('run-exe-on-prefix', id),
+    runExeInGameFolder:   (id) => ipcRenderer.invoke('run-exe-in-game-folder', id),
 
     // GE-Proton downloader / manager
     deleteProton:           (dir)       => ipcRenderer.invoke('delete-proton', dir),

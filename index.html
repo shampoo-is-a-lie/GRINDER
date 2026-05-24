@@ -468,11 +468,14 @@
         <label class="toggle-row"><input type="checkbox" id="edit-eac"><span>EasyAntiCheat Runtime</span></label>
       </div>
 
-      <!-- Run .exe on Prefix -->
+      <!-- Run .exe tools -->
       <div style="border-top:1px solid var(--border_solid); padding-top:14px; display:flex; flex-direction:column; gap:8px;">
         <span style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px;">Tools</span>
-        <button id="btn-run-exe-on-prefix" class="btn-cancel" style="padding:9px 16px; font-size:13px; align-self:flex-start;" title="Open any .exe or .msi inside this game's Wine prefix — great for mod installers">Run .exe on Prefix</button>
-        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Runs any .exe or .msi through this game's Proton/Wine prefix. Save the game first to apply prefix or Proton changes.</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="btn-run-exe-in-game-folder" class="btn-cancel" style="padding:9px 16px; font-size:13px;" title="Browse the game's install folder and run an .exe through this game's Proton/Wine prefix — great for launching the game's own tools or config utilities">Run .exe in Game Folder</button>
+          <button id="btn-run-exe-on-prefix" class="btn-cancel" style="padding:9px 16px; font-size:13px;" title="Open any .exe or .msi from anywhere and run it through this game's Wine prefix — great for mod installers">Run .exe on Prefix</button>
+        </div>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Run any .exe or .msi through this game's Proton/Wine prefix. <em>Game Folder</em> opens inside the install directory; <em>On Prefix</em> lets you browse anywhere. Save the game first to apply prefix or Proton changes.</span>
       </div>
 
       <!-- GOG Compat Files (GOG only) -->
@@ -480,6 +483,24 @@
         <span style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px;">GOG Compatibility</span>
         <button id="btn-install-redist" style="background:rgba(155,89,217,0.15); border:1px solid #9b59d9; color:#c792ea; padding:9px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:13px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; align-self:flex-start; transition:0.2s;" title="Download and install GOG compatibility files (VC++, DirectX, etc.) into this game's Wine prefix">Install Compat. Files</button>
         <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Downloads and runs GOG redistribs (VC++, DirectX, etc.) into this game's Wine prefix via gogdl.</span>
+      </div>
+
+      <!-- Verify & Repair (GOG and Epic only) -->
+      <div id="edit-verify-repair" style="display:none; border-top:1px solid var(--border_solid); padding-top:14px; flex-direction:column; gap:8px;">
+        <span style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px;">Integrity</span>
+        <button id="btn-verify-repair" style="background:rgba(33,150,243,0.12); border:1px solid rgba(33,150,243,0.4); color:#64b5f6; padding:9px 16px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:13px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; align-self:flex-start; transition:0.2s;" title="Check all game files against the store manifest and re-download anything missing or corrupted">Verify &amp; Repair</button>
+        <span style="font-size:11px; color:var(--text_dim); line-height:1.5;">Checks all files against the store manifest and re-downloads anything missing or corrupted. Requires an active store login.</span>
+      </div>
+
+      <!-- Achievements (GOG only) -->
+      <div id="edit-achievements" style="display:none; border-top:1px solid var(--border_solid); padding-top:14px; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:10px; font-weight:900; color:var(--text_dim); text-transform:uppercase; letter-spacing:1px; flex:1;">Achievements</span>
+          <button id="btn-sync-achievements" style="background:rgba(101,180,101,0.12); border:1px solid rgba(101,180,101,0.4); color:#82c882; padding:6px 13px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:0.2s;">Sync Now</button>
+        </div>
+        <div id="achievements-status" style="font-size:11px; color:var(--text_dim); font-style:italic; display:none;"></div>
+        <div id="achievements-summary" style="font-size:12px; color:var(--text_sec); display:none;"></div>
+        <div id="achievements-list" style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; padding-right:4px;"></div>
       </div>
 
       <div class="modal-actions">
