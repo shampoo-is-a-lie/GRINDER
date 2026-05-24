@@ -1793,13 +1793,18 @@ function findLinuxGameExe(gameDir) {
 
 let activeGogInstallProc = null;
 
-ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
+ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = false) => {
     if (activeGogInstallProc) return { ok: false, error: 'An installation is already in progress.' };
     const gogdl = findGogdl();
     if (!gogdl) return { ok: false, error: 'gogdl not found. Place the gogdl binary in the same folder as GRINDER.AppImage.' };
 
     const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
-    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+
+    // For DLCs the user selects the base game's install folder directly.
+    // gogdl's --path is a parent directory, so we pass dirname(dir) and let
+    // gogdl merge DLC files into the existing game subfolder at dir.
+    const gogdlPath = isDlc ? path.dirname(dir) : dir;
+    if (!isDlc) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
 
     // Ensure the binary is executable
     try { fs.chmodSync(gogdl, '755'); } catch {}
@@ -1813,14 +1818,17 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
     const send = d => { try { event.sender.send('gog-install-progress', String(d)); } catch {} };
 
     return new Promise(resolve => {
-        send(`Running: gogdl --auth-config-path <auth> download ${appId} --platform ${platform} --path ${dir}\n`);
-        activeGogInstallProc = spawn(gogdl, [
+        const args = [
             '--auth-config-path', authPath,
             'download', appId,
             '--platform', platform,
-            '--path',     dir,
+            '--path',     gogdlPath,
             '--lang',     'en-US',
-        ], {
+        ];
+        if (isDlc) args.push('--dlc-only');
+        send(`Running: gogdl download ${appId} --platform ${platform} --path ${gogdlPath}${isDlc ? ' --dlc-only' : ''}\n`);
+
+        activeGogInstallProc = spawn(gogdl, args, {
             stdio: ['ignore', 'pipe', 'pipe'],
             // Point gogdl to GRINDER's own config dir so manifests don't
             // collide with Heroic's cached manifests causing false "Nothing to do"
@@ -1832,6 +1840,15 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir) => {
         activeGogInstallProc.on('close', async code => {
             activeGogInstallProc = null;
             try { fs.unlinkSync(authPath); } catch {}
+
+            if (isDlc) {
+                // DLCs merge into the existing base game folder — no new subfolder to scan.
+                // Success is determined solely by exit code.
+                resolve({ ok: code === 0, exitCode: code, install_dir: dir,
+                          gameInfo: code === 0 ? { install_path: dir, executable: null } : null });
+                return;
+            }
+
             const gameInfo = code === 0 ? findGogInstallResult(dir, appId) : null;
             const ok = code === 0 && gameInfo !== null;
 

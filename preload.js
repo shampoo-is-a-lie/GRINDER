@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld('api', {
     gogListOwned:       ()                    => ipcRenderer.invoke('gog-list-owned'),
     gogImport:          (games)               => ipcRenderer.invoke('gog-import', games),
     gogSyncPlatforms:   (games)               => ipcRenderer.invoke('gog-sync-platforms', games),
-    gogInstall:         (id, platform, dir)   => ipcRenderer.invoke('gogdl-install', id, platform, dir),
+    gogInstall:         (id, platform, dir, isDlc) => ipcRenderer.invoke('gogdl-install', id, platform, dir, isDlc),
     gogCancelInstall:   ()                    => ipcRenderer.invoke('gogdl-cancel-install'),
     onGogLoginProgress:   (cb) => ipcRenderer.on('gog-login-progress',   (_, d) => cb(d)),
     onGogInstallProgress: (cb) => ipcRenderer.on('gog-install-progress', (_, d) => cb(d)),

@@ -887,7 +887,9 @@ let _miniPct          = 0;
 
 function openInstallModal(game) {
     installingGame = game;
-    document.getElementById('install-modal-title').textContent  = 'Install Game';
+    const isDlc = !!game.is_dlc;
+
+    document.getElementById('install-modal-title').textContent    = isDlc ? 'Install DLC' : 'Install Game';
     document.getElementById('install-modal-subtitle').textContent = game.title;
     document.getElementById('install-config-panel').style.display   = 'flex';
     document.getElementById('install-progress-panel').style.display = 'none';
@@ -897,6 +899,14 @@ function openInstallModal(game) {
     document.getElementById('install-pct-label').textContent = '0%';
     document.getElementById('install-speed-label').textContent = '';
     document.getElementById('install-eta-label').textContent = '';
+
+    // Swap label/hint for DLC vs game
+    const dirLabel = document.getElementById('install-dir-label');
+    const dirHint  = document.getElementById('install-dir-hint');
+    if (dirLabel) dirLabel.textContent = isDlc ? 'Base Game Folder' : 'Install Directory';
+    if (dirHint)  dirHint.textContent  = isDlc
+        ? 'Select the folder where the base game is already installed. DLC files will be merged into it.'
+        : 'The game will be installed inside a subfolder here. Make sure you have enough disk space.';
 
     // Platform selector — show only for GOG games with multiple platforms available
     const platRow    = document.getElementById('install-platform-row');
@@ -920,11 +930,23 @@ function openInstallModal(game) {
         platWin.onclick    = () => setPlat('windows');
     }
 
-    // Pre-fill install dir from settings, then fetch sizes
-    window.api.getSetting('default_install_dir').then(d => {
-        document.getElementById('install-dir-input').value = d || '~/Games/CafeNeurotico';
+    if (isDlc) {
+        // Try to auto-fill with the base game's install_path via title-prefix match
+        const sep = game.title.search(/\s[–—-]\s/);
+        const basePrefix = (sep > 0 ? game.title.slice(0, sep) : game.title.split(':')[0]).trim().toLowerCase();
+        const baseGame = allGames.find(g =>
+            !g.is_dlc && g.store === 'gog' && g.installed && g.install_path &&
+            g.title.toLowerCase().startsWith(basePrefix)
+        );
+        document.getElementById('install-dir-input').value = baseGame?.install_path || '';
         fetchInstallSizes();
-    });
+    } else {
+        // Pre-fill install dir from settings, then fetch sizes
+        window.api.getSetting('default_install_dir').then(d => {
+            document.getElementById('install-dir-input').value = d || '~/Games/CafeNeurotico';
+            fetchInstallSizes();
+        });
+    }
 
     updateInstallQueueBadge();
     modalInstall.classList.add('active');
@@ -1248,7 +1270,7 @@ document.getElementById('btn-install-start')?.addEventListener('click', async ()
     const dir = document.getElementById('install-dir-input').value.trim();
     if (!dir) { setStatus('Choose an install directory first.'); return; }
 
-    await window.api.setSetting('default_install_dir', dir);
+    if (!installingGame.is_dlc) await window.api.setSetting('default_install_dir', dir);
     const platform = selectedPlatform || installingGame.platform || 'windows';
 
     if (installActive) {
@@ -1298,7 +1320,7 @@ async function beginInstall(game, dir, platform) {
 
     let result;
     if (game.store === 'gog') {
-        result = await window.api.gogInstall(game.app_id, platform, dir);
+        result = await window.api.gogInstall(game.app_id, platform, dir, !!game.is_dlc);
     } else {
         result = await window.api.installGame(game.app_id, dir);
     }
@@ -1311,7 +1333,7 @@ async function beginInstall(game, dir, platform) {
             const gi = result.gameInfo;
             await window.api.updateGame(game.id, {
                 install_path: gi?.install_path || null,
-                executable:   gi?.executable   || null,
+                executable:   game.is_dlc ? null : (gi?.executable || null),
                 platform,
                 installed:    1,
             });
@@ -1348,7 +1370,13 @@ async function beginInstall(game, dir, platform) {
                 updateMiniWidget();
                 openDlmModal();
             } else {
-                document.getElementById('install-done-msg').textContent = `${game.title} installed!`;
+                document.getElementById('install-done-msg').textContent = game.is_dlc
+                    ? `${game.title} — DLC installed!`
+                    : `${game.title} installed!`;
+                const sub = document.getElementById('install-done-sub');
+                if (sub) sub.textContent = game.is_dlc
+                    ? 'The DLC has been merged into the base game\'s installation folder.'
+                    : 'The game is ready to launch from GRINDER.';
                 document.getElementById('install-done-panel').style.display = 'flex';
                 updateMiniWidget();
             }
