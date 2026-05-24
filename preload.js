@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('api', {
     // Settings
     getSetting:    (k)    => ipcRenderer.invoke('get-setting', k),
     setSetting:    (k, v) => ipcRenderer.invoke('set-setting', k, v),
+    getInstallLog: ()     => ipcRenderer.invoke('get-install-log'),
+    saveInstallLog:(log)  => ipcRenderer.invoke('save-install-log', log),
     getCngmTheme:  ()     => ipcRenderer.invoke('get-cngm-theme'),
 
     // Disk size (installed game)

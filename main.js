@@ -795,6 +795,14 @@ ipcMain.handle('launch-game', async (_, gameId) => {
 ipcMain.handle('get-setting', (_, key) => db.prepare("SELECT value FROM settings WHERE key=?").get(key)?.value ?? null);
 ipcMain.handle('set-setting', (_, key, value) => { db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)").run(key, value); return true; });
 
+const installLogPath = path.join(configDir, 'installLog.json');
+ipcMain.handle('get-install-log', () => {
+    try { return JSON.parse(fs.readFileSync(installLogPath, 'utf8')); } catch { return []; }
+});
+ipcMain.handle('save-install-log', (_, entries) => {
+    try { fs.writeFileSync(installLogPath, JSON.stringify(entries), 'utf8'); return true; } catch { return false; }
+});
+
 // Read the active theme name from CNGM's settings DB so GRINDER can match its appearance
 ipcMain.handle('get-cngm-theme', () => {
     const cngmDb = path.join(appImageDir, 'GameManagerConfig', 'games.db');

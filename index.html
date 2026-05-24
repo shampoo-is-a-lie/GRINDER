@@ -577,6 +577,7 @@
         <div id="games-toolbar">
           <input id="search-input" placeholder="Search games..." autocomplete="off">
           <button id="btn-verify-installs" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Check all installed games and reset any with missing files">Refresh &amp; Check Size</button>
+          <button id="btn-open-dlm" style="background:rgba(255,255,255,0.05); border:1px solid var(--border_solid); color:var(--text_dim); padding:7px 14px; border-radius:5px; font-family:Raleway,sans-serif; font-weight:900; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:0.2s;" title="Download Manager &amp; Install Log">Downloads</button>
         </div>
         <div id="filter-bar"></div>
         <div id="games-list"></div>
@@ -792,7 +793,7 @@
         <!-- Active download -->
         <div id="dlm-active-section" style="display:none; flex-direction:column; gap:10px;">
           <div style="font-size:9px; font-weight:900; letter-spacing:3px; color:var(--text_dim); text-transform:uppercase;">Downloading Now</div>
-          <div style="background:rgba(255,255,255,0.03); border:1px solid var(--accent); border-radius:8px; padding:20px 22px;">
+          <div id="dlm-active-card" style="background:rgba(255,255,255,0.03); border:1px solid var(--accent); border-radius:8px; padding:20px 22px; cursor:pointer;" title="Click to view install log">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; gap:14px;">
               <div style="min-width:0;">
                 <div id="dlm-active-store" style="font-size:9px; font-weight:900; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;"></div>

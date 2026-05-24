@@ -1382,6 +1382,15 @@ document.getElementById('btn-install-cancel-running')?.addEventListener('click',
 document.getElementById('btn-dlm-close')?.addEventListener('click', closeDlmModal);
 document.getElementById('modal-dlm')?.addEventListener('click', e => { if (e.target === document.getElementById('modal-dlm')) closeDlmModal(); });
 
+// Clicking the active-download card navigates back to the install modal console
+document.getElementById('dlm-active-card')?.addEventListener('click', e => {
+    if (e.target.closest('#dlm-btn-cancel-active')) return;
+    if (!installActive) return;
+    closeDlmModal();
+    if (installModalMinimized) restoreInstallModal();
+    else modalInstall.classList.add('active');
+});
+
 document.getElementById('dlm-btn-cancel-active')?.addEventListener('click', async () => {
     if (activeInstallGame?.store === 'gog') await window.api.gogCancelInstall();
     else await window.api.cancelInstall();
@@ -1394,6 +1403,7 @@ document.getElementById('dlm-btn-cancel-active')?.addEventListener('click', asyn
 
 document.getElementById('dlm-btn-clear-all')?.addEventListener('click', () => {
     installHistory = [];
+    window.api.saveInstallLog([]);
     renderDlmModal();
 });
 
@@ -1557,6 +1567,7 @@ async function beginInstall(game, dir, platform) {
             }
         }
         installHistory.push({ game, success: true, completedAt: Date.now() });
+        window.api.saveInstallLog(installHistory);
         setStatus(`${game.title} installed successfully.`);
         loadGames();
 
@@ -1589,6 +1600,7 @@ async function beginInstall(game, dir, platform) {
         }
     } else {
         installHistory.push({ game, success: false, completedAt: Date.now() });
+        window.api.saveInstallLog(installHistory);
         document.getElementById('install-log').textContent += `\n✗ Installation failed (exit ${result.exitCode ?? result.error ?? 'error'}).\n`;
         document.getElementById('install-progress-panel').style.display = 'flex';
         const cb = document.getElementById('btn-install-cancel-running');
@@ -2309,6 +2321,10 @@ window.api.onCliSearch(term => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+window.api.getInstallLog().then(log => { if (log?.length) installHistory = log; });
+
+document.getElementById('btn-open-dlm')?.addEventListener('click', openDlmModal);
+
 loadProtonVersions();
 refreshLegendaryStatus();
 refreshGogStatus();
