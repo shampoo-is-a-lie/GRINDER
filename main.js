@@ -880,6 +880,22 @@ ipcMain.handle('get-all-disk-sizes', () => {
 ipcMain.handle('get-config-dir', () => configDir);
 ipcMain.handle('open-config-dir', () => shell.openPath(configDir));
 
+ipcMain.handle('reset-grinder', () => {
+    if (db) { try { db.close(); } catch(e) {} db = null; }
+    try { fs.unlinkSync(dbPath); } catch(e) {}
+    try { fs.rmSync(prefixesDir, { recursive: true, force: true }); } catch(e) {}
+    try { fs.rmSync(logDir,      { recursive: true, force: true }); } catch(e) {}
+    initDb();
+    return { ok: true };
+});
+
+ipcMain.handle('delete-all-grinder-data', () => {
+    if (db) { try { db.close(); } catch(e) {} db = null; }
+    try { fs.rmSync(configDir, { recursive: true, force: true }); } catch(e) {}
+    app.quit();
+    return { ok: true };
+});
+
 ipcMain.handle('get-game-log', (_, gameId) => {
     const game = db.prepare('SELECT title FROM games WHERE id = ?').get(gameId);
     if (!game) return { exists: false, content: '' };

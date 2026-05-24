@@ -84,6 +84,10 @@ contextBridge.exposeInMainWorld('api', {
     onCliSetup:           (cb) => ipcRenderer.on('cli-setup', (_, id) => cb(id)),
     onCliSync:            (cb) => ipcRenderer.on('cli-sync',  (_, tab) => cb(tab)),
 
+    // Destructive actions
+    resetGrinder:         () => ipcRenderer.invoke('reset-grinder'),
+    deleteAllGrinderData: () => ipcRenderer.invoke('delete-all-grinder-data'),
+
     // Play tasks + run-exe
     getPlayTasks:   (id)  => ipcRenderer.invoke('get-play-tasks', id),
     runExeOnPrefix: (id)  => ipcRenderer.invoke('run-exe-on-prefix', id),

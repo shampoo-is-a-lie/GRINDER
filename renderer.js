@@ -1836,6 +1836,31 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
 
 document.getElementById('btn-browse-config-dir')?.addEventListener('click', () => window.api.openConfigDir());
 
+// Danger zone modals
+document.getElementById('btn-reset-grinder')?.addEventListener('click', () => {
+    document.getElementById('modal-reset-grinder').classList.add('active');
+});
+document.getElementById('btn-reset-grinder-cancel')?.addEventListener('click', () => {
+    document.getElementById('modal-reset-grinder').classList.remove('active');
+});
+document.getElementById('btn-reset-grinder-confirm')?.addEventListener('click', async () => {
+    document.getElementById('modal-reset-grinder').classList.remove('active');
+    await window.api.resetGrinder();
+    allGames = [];
+    renderGames([]);
+    setStatus('GRINDER has been reset.');
+});
+
+document.getElementById('btn-delete-grinder-data')?.addEventListener('click', () => {
+    document.getElementById('modal-delete-grinder-data').classList.add('active');
+});
+document.getElementById('btn-delete-data-cancel')?.addEventListener('click', () => {
+    document.getElementById('modal-delete-grinder-data').classList.remove('active');
+});
+document.getElementById('btn-delete-data-confirm')?.addEventListener('click', async () => {
+    await window.api.deleteAllGrinderData();
+});
+
 // ── Log Modal ─────────────────────────────────────────────────────────────────
 async function openLogModal(gameId, gameTitle) {
     const modal   = document.getElementById('modal-game-log');
