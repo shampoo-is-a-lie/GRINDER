@@ -1793,25 +1793,26 @@ function findLinuxGameExe(gameDir) {
 
 let activeGogInstallProc = null;
 
-ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = false) => {
+ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = false, baseAppId = null) => {
     if (activeGogInstallProc) return { ok: false, error: 'An installation is already in progress.' };
     const gogdl = findGogdl();
     if (!gogdl) return { ok: false, error: 'gogdl not found. Place the gogdl binary in the same folder as GRINDER.AppImage.' };
 
     const dir = expandTilde(installDir) || path.join(HOME, 'Games', 'CafeNeurotico');
 
-    // For DLCs the user selects the base game's install folder directly.
-    // gogdl's --path is a parent directory, so we pass dirname(dir) and let
-    // gogdl merge DLC files into the existing game subfolder at dir.
-    const gogdlPath = isDlc ? path.dirname(dir) : dir;
+    // For DLCs the user selects the base game's install folder.
+    // gogdl --path expects the PARENT of the game folder; we pass dirname(dir).
+    // We download using the base game's app_id and --dlcs <dlc_id> so gogdl
+    // knows how to merge the DLC into the existing installation correctly.
+    const gogdlPath  = isDlc ? path.dirname(dir) : dir;
+    const downloadId = isDlc && baseAppId ? baseAppId : appId;
     if (!isDlc) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
 
     // Ensure the binary is executable
     try { fs.chmodSync(gogdl, '755'); } catch {}
 
-    // Delete the cached manifest for this game so gogdl always does a fresh
-    // file comparison rather than saying "Nothing to do" on reinstalls.
-    const manifestPath = path.join(configDir, 'gogdl', 'manifests', appId);
+    // Clear cached manifest so gogdl does a fresh file comparison
+    const manifestPath = path.join(configDir, 'gogdl', 'manifests', downloadId);
     try { fs.rmSync(manifestPath, { force: true }); } catch {}
 
     const authPath = writeGogAuthConfig();
@@ -1820,13 +1821,14 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = fal
     return new Promise(resolve => {
         const args = [
             '--auth-config-path', authPath,
-            'download', appId,
+            'download', downloadId,
             '--platform', platform,
             '--path',     gogdlPath,
             '--lang',     'en-US',
         ];
-        if (isDlc) args.push('--dlc-only');
-        send(`Running: gogdl download ${appId} --platform ${platform} --path ${gogdlPath}${isDlc ? ' --dlc-only' : ''}\n`);
+        if (isDlc && baseAppId) args.push('--dlcs', appId);
+        else if (isDlc)         args.push('--dlc-only');
+        send(`Running: gogdl download ${downloadId} --platform ${platform} --path ${gogdlPath}${isDlc && baseAppId ? ` --dlcs ${appId}` : isDlc ? ' --dlc-only' : ''}\n`);
 
         activeGogInstallProc = spawn(gogdl, args, {
             stdio: ['ignore', 'pipe', 'pipe'],

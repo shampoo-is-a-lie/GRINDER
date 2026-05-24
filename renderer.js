@@ -1320,7 +1320,14 @@ async function beginInstall(game, dir, platform) {
 
     let result;
     if (game.store === 'gog') {
-        result = await window.api.gogInstall(game.app_id, platform, dir, !!game.is_dlc);
+        let baseAppId = null;
+        if (game.is_dlc) {
+            // Look up the base game by matching install_path so we can use
+            // gogdl's --dlcs flag (requires the base game's app_id, not the DLC's)
+            const base = allGames.find(g => !g.is_dlc && g.store === 'gog' && g.install_path === dir);
+            baseAppId = base?.app_id || null;
+        }
+        result = await window.api.gogInstall(game.app_id, platform, dir, !!game.is_dlc, baseAppId);
     } else {
         result = await window.api.installGame(game.app_id, dir);
     }
