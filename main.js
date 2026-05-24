@@ -104,6 +104,15 @@ async function headlessInstall(store, appId, platform, installDir) {
             return { ok, lastLines };
         };
 
+        // Snapshot subdirectories before gogdl runs (same guard as gogdl-install IPC).
+        let preExistingDirsH;
+        try {
+            preExistingDirsH = new Set(
+                fs.readdirSync(dir, { withFileTypes: true })
+                  .filter(e => e.isDirectory()).map(e => e.name)
+            );
+        } catch { preExistingDirsH = new Set(); }
+
         const activePlat = platform || 'windows';
         writeProgress({ ...base, step: 'downloading', percent: 0, message: `Starting download (${activePlat})...` });
         const { ok: dlOk, lastLines } = await runGogdlDownload(activePlat);
@@ -111,7 +120,7 @@ async function headlessInstall(store, appId, platform, installDir) {
         try { fs.unlinkSync(authPath); } catch {}
         if (!dlOk) { writeProgress({ ...base, step: 'error', message: lastLines.slice(-2).join(' | ') || 'Download failed.', done: true }); return; }
 
-        const gameInfo = findGogInstallResult(dir, appId);
+        const gameInfo = findGogInstallResult(dir, appId, preExistingDirsH);
         if (!gameInfo) { writeProgress({ ...base, step: 'error', message: 'Install verification failed.', done: true }); return; }
         writeProgress({ ...base, step: 'installing', percent: 100, message: 'Updating library...' });
 
@@ -1980,7 +1989,7 @@ ipcMain.handle('get-gog-achievements', (_, appId) => {
 // Detect a successful GOG install by reading the metadata gogdl leaves behind.
 // Windows games: goggame-<id>.info  →  play tasks include the primary executable.
 // Linux native:  .gogdl-linux-manifest  →  no .info file; scan dir for launcher.
-function findGogInstallResult(baseDir, appId) {
+function findGogInstallResult(baseDir, appId, preExistingDirs = null) {
     try {
         const entries = fs.readdirSync(baseDir, { withFileTypes: true });
         for (const entry of entries) {
@@ -2000,8 +2009,22 @@ function findGogInstallResult(baseDir, appId) {
             // ── Linux native path ─────────────────────────────────────────────
             // gogdl writes .gogdl-linux-manifest after a successful Linux install.
             // No .info file is created; find the main launcher instead.
+            // Guard: verify this directory belongs to the right game so that a
+            // previously-installed Linux game in the same parent folder is never
+            // mistaken for the newly-installed one.
             const linuxManifest = path.join(gameDir, '.gogdl-linux-manifest');
             if (fs.existsSync(linuxManifest)) {
+                // Primary check: gogdl writes a plain-text "gameinfo" file whose
+                // lines include the numeric appId — fast and reliable.
+                try {
+                    const lines = fs.readFileSync(path.join(gameDir, 'gameinfo'), 'utf8')
+                        .split('\n').map(l => l.trim());
+                    if (!lines.includes(String(appId))) continue;
+                } catch {
+                    // gameinfo absent — fall back to the pre-install snapshot:
+                    // skip any directory that already existed before this install.
+                    if (preExistingDirs?.has(entry.name)) continue;
+                }
                 const exe = findLinuxGameExe(gameDir);
                 return { install_path: gameDir, executable: exe };
             }
@@ -2054,6 +2077,16 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = fal
     const downloadId = isDlc && baseAppId ? baseAppId : appId;
     if (!isDlc) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
 
+    // Snapshot subdirectories before gogdl runs so findGogInstallResult can
+    // skip pre-existing Linux-native game folders (avoids metadata cross-contamination).
+    let preExistingDirs;
+    try {
+        preExistingDirs = new Set(
+            fs.readdirSync(dir, { withFileTypes: true })
+              .filter(e => e.isDirectory()).map(e => e.name)
+        );
+    } catch { preExistingDirs = new Set(); }
+
     // Ensure the binary is executable
     try { fs.chmodSync(gogdl, '755'); } catch {}
 
@@ -2097,7 +2130,7 @@ ipcMain.handle('gogdl-install', (event, appId, platform, installDir, isDlc = fal
                 return;
             }
 
-            const gameInfo = code === 0 ? findGogInstallResult(dir, appId) : null;
+            const gameInfo = code === 0 ? findGogInstallResult(dir, appId, preExistingDirs) : null;
             const ok = code === 0 && gameInfo !== null;
 
             if (ok) {
