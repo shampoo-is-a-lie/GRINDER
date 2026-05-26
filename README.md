@@ -125,6 +125,22 @@ GRINDER bundles the following tools:
 | [legendary](https://github.com/derrod/legendary) | [GPL v3](https://github.com/derrod/legendary/blob/master/LICENSE) |
 | [gogdl](https://github.com/shampoo-is-a-lie/gogdl) (fork of [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl)) | [GPL v3](https://github.com/shampoo-is-a-lie/gogdl/blob/grinder/LICENSE) |
 
+## The Cafe Neurotico Ecosystem
+
+```
+  CNGM           Central hub — PC game library, store sync, launches all companion apps
+    │
+    ├──▸  CREMA       Fullscreen / gamepad counterpart for CNGM + EmuLatte
+    │
+    ├──▸  GRINDER ◈   GOG & Epic install engine — feeds games back into CNGM
+    │
+    ├──▸  EmuLatte    ROM library manager — emulation counterpart to CNGM
+    │
+    └──▸  CN Clock    Floating desktop clock — shows art from CNGM + EmuLatte
+```
+
+Place `GRINDER.AppImage` in the same folder as `CNGM.AppImage`. CNGM routes all GOG and Epic launches through GRINDER automatically.
+
 ## License
 
 Copyright (C) 2026 J.R.A. (Shampoo is a Lie)
